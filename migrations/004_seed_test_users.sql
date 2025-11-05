@@ -1,0 +1,6 @@
+-- INSERT INTO users (name, email, role, password)
+-- VALUES
+-- ('Sara Ahmed', 'sara.user@example.com', 'seller', '123456'),
+-- ('Bilal Raza', 'bilal.user@example.com', 'buyer', '123456'),
+-- ('Hassan Ali', 'hassan.user@example.com', 'seller', '123456'),
+-- ('Fatima Noor', 'fatima.user@example.com', 'buyer', '123456');

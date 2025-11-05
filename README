@@ -1,0 +1,25 @@
+// # BidMaster Admin Backend
+
+// This is the backend for the **BidMaster Admin Panel**, part of the BidMaster mobile app ecosystem.  
+// It provides admin authentication, user management, product approval/rejection, and analytics endpoints.
+
+// ---
+
+// ## 🚀 Features
+// - Secure Admin Login (JWT)
+// - Dashboard Analytics (Users, Products, Approvals)
+// - Product Review (Approve/Reject)
+// - User Management (View/Update)
+// - PostgreSQL (via Neon.tech)
+// - Migrations & Admin Seeding
+// - Express.js REST APIs
+
+// ---
+
+// ## 🛠 Setup Instructions
+
+// ### 1️⃣ Clone & Install
+// ```bash
+// git clone https://github.com/yourusername/bidmaster-admin-backend.git
+// cd bidmaster-admin-backend
+// npm install
