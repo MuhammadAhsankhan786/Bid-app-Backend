@@ -13,39 +13,15 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-// CORS configuration for Flutter web compatibility
-const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-
-    // Allow any localhost port for development
-    if (origin.startsWith("http://localhost")) {
-      return callback(null, true);
-    }
-
-    // Allow specific production origins
-    if (
-      origin.startsWith("https://bidmaster-web.app") ||
-      origin.startsWith("https://bidmaster-api.onrender.com")
-    ) {
-      return callback(null, true);
-    }
-
-    return callback(new Error("Not allowed by CORS"));
-  },
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
-};
-
-// Apply CORS middleware
-app.use(cors(corsOptions));
-
-// Handle preflight requests explicitly for all routes
-app.options(/.*/, cors(corsOptions))
+// Global CORS middleware for Flutter web compatibility
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 
 
 // Admin routes (existing)
@@ -62,4 +38,5 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (req, res) => res.send("BidMaster Admin API running"));
-app.listen(process.env.PORT, () => console.log(`🚀 Server running on port ${process.env.PORT}`));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
