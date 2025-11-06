@@ -11,32 +11,98 @@ import cors from "cors";
 
 dotenv.config();
 const app = express();
-app.use(express.json());
 
-// Global CORS middleware for Flutter web compatibility
+/* ======================================================
+   ✅ CORS FIX for Flutter Web + Render API
+   Works for Express v5 (no crash on wildcard)
+====================================================== */
+
+// CORS configuration - allow localhost, Render & future web app
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // mobile, Postman
+    if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+      return callback(null, true);
+    }
+    if (origin.includes("bidmaster-api.onrender.com")) {
+      return callback(null, true);
+    }
+    // Allow all temporarily
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: [
+    "Origin",
+    "X-Requested-With",
+    "Content-Type",
+    "Accept",
+    "Authorization",
+  ],
+  exposedHeaders: ["Content-Range", "X-Content-Range"],
+  optionsSuccessStatus: 204,
+  maxAge: 86400, // 24 hours
+};
+
+// ✅ Handle preflight requests (Express v5 safe)
+app.options(/.*/, cors(corsOptions), (req, res) => {
+  const origin = req.headers.origin;
+  res.header("Access-Control-Allow-Origin", origin || "*");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+  res.header("Access-Control-Max-Age", "86400");
+  return res.sendStatus(204); // no content
+});
+
+// ✅ Apply global CORS middleware
+app.use(cors(corsOptions));
+
+// ✅ Fallback header middleware (extra safety)
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Access-Control-Allow-Credentials", "true");
+  }
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
   next();
 });
 
+// ✅ JSON parsing after CORS
+app.use(express.json());
 
-// Admin routes (existing)
+/* ======================================================
+   ✅ Routes
+====================================================== */
 app.use("/api/admin", adminRoutes);
-
-// Auth routes (existing + new mobile app routes)
 app.use("/api/auth", authRoutes);
-
-// Mobile app routes
 app.use("/api/products", productRoutes);
 app.use("/api/bids", bidRoutes);
 app.use("/api/auction", auctionRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/notifications", notificationRoutes);
 
-app.get("/", (req, res) => res.send("BidMaster Admin API running"));
+// Health check route
+app.get("/", (req, res) => res.send("BidMaster Admin API running ✅"));
+
+/* ======================================================
+   ✅ Start Server
+====================================================== */
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});

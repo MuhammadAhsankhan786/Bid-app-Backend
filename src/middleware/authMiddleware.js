@@ -21,14 +21,40 @@ export const verifyAdmin = async (req, res, next) => {
       
       if (userResult.rows.length === 0) {
         // Create admin user if doesn't exist (for OTP login)
-        const adminResult = await pool.query(
-          `INSERT INTO users (name, email, phone, role, status, password) 
-           VALUES ($1, $2, $3, 'admin', 'approved', '')
-           ON CONFLICT (phone) DO UPDATE SET role = 'admin'
-           RETURNING id, phone, role`,
-          [`Admin ${decoded.phone}`, `admin@${decoded.phone.replace(/\+/g, '')}.com`, decoded.phone]
-        );
-        req.user = { id: adminResult.rows[0].id, phone: decoded.phone, role: 'admin' };
+        // Handle conflicts gracefully - try insert, fallback to select if conflict
+        const email = `admin@${decoded.phone.replace(/\+/g, '')}.com`;
+        try {
+          const adminResult = await pool.query(
+            `INSERT INTO users (name, email, phone, role, status, password) 
+             VALUES ($1, $2, $3, 'admin', 'approved', '')
+             ON CONFLICT (phone) DO UPDATE SET role = 'admin', status = 'approved'
+             RETURNING id, phone, role`,
+            [`Admin ${decoded.phone}`, email, decoded.phone]
+          );
+          req.user = { id: adminResult.rows[0].id, phone: decoded.phone, role: 'admin' };
+        } catch (insertError) {
+          // If insert fails due to email conflict or other unique violation
+          if (insertError.code === '23505') { // Unique violation
+            // Try to find existing user by phone or email
+            const existingUser = await pool.query(
+              "SELECT id, phone, role FROM users WHERE phone = $1 OR email = $2 LIMIT 1",
+              [decoded.phone, email]
+            );
+            if (existingUser.rows.length > 0) {
+              // Update existing user to admin if needed
+              await pool.query(
+                "UPDATE users SET role = 'admin', status = 'approved' WHERE id = $1",
+                [existingUser.rows[0].id]
+              );
+              req.user = { id: existingUser.rows[0].id, phone: decoded.phone, role: 'admin' };
+            } else {
+              // If still can't find, re-throw
+              throw insertError;
+            }
+          } else {
+            throw insertError;
+          }
+        }
       } else {
         const user = userResult.rows[0];
         if (user.role !== 'admin') {
@@ -48,7 +74,14 @@ export const verifyAdmin = async (req, res, next) => {
     
     next();
   } catch (error) {
-    console.error("Auth error:", error);
+    // Only log non-expired token errors (expired tokens are expected)
+    if (error.name !== 'TokenExpiredError') {
+      console.error("Auth error:", error.name, error.message);
+    }
+    // Return appropriate error message
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: "Token expired" });
+    }
     res.status(401).json({ message: "Invalid token" });
   }
 };
@@ -98,7 +131,14 @@ export const verifyUser = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    console.error("Auth error:", error);
+    // Only log non-expired token errors (expired tokens are expected)
+    if (error.name !== 'TokenExpiredError') {
+      console.error("Auth error:", error.name, error.message);
+    }
+    // Return appropriate error message
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ success: false, message: "Token expired" });
+    }
     res.status(401).json({ success: false, message: "Invalid or expired token" });
   }
 };

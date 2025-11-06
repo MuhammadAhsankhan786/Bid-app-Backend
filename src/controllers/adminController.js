@@ -35,41 +35,66 @@ export const AdminController = {
     try {
       const { search, status, role, page = 1, limit = 20 } = req.query;
       
-      let query = `
-        SELECT 
-          id, name, email, phone, role, status, bids_count, created_at
-        FROM users 
-        WHERE role != 'admin'
-      `;
+      // Build WHERE conditions
+      let whereConditions = ["u.role != 'admin'"];
       const params = [];
       let paramCount = 1;
 
       if (search) {
-        query += ` AND (name ILIKE $${paramCount++} OR email ILIKE $${paramCount++})`;
+        whereConditions.push(`(u.name ILIKE $${paramCount++} OR u.email ILIKE $${paramCount++})`);
         params.push(`%${search}%`, `%${search}%`);
       }
 
       if (status) {
-        query += ` AND status = $${paramCount++}`;
+        whereConditions.push(`u.status = $${paramCount++}`);
         params.push(status);
       }
 
       if (role) {
-        query += ` AND role = $${paramCount++}`;
+        whereConditions.push(`u.role = $${paramCount++}`);
         params.push(role);
       }
 
-      query += ` ORDER BY created_at DESC LIMIT $${paramCount++} OFFSET $${paramCount}`;
+      const whereClause = whereConditions.join(' AND ');
+      
+      // Main query - compute bids_count dynamically from bids table
+      // Uses LEFT JOIN subquery to count bids per user
+      let query = `
+        SELECT 
+          u.id, 
+          u.name, 
+          u.email, 
+          u.phone, 
+          u.role, 
+          u.status, 
+          COALESCE(b.bids_count, 0) as bids_count, 
+          u.created_at
+        FROM users u
+        LEFT JOIN (
+          SELECT user_id, COUNT(*) as bids_count
+          FROM bids
+          GROUP BY user_id
+        ) b ON u.id = b.user_id
+        WHERE ${whereClause}
+        ORDER BY u.created_at DESC 
+        LIMIT $${paramCount++} OFFSET $${paramCount}
+      `;
       params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
 
-      const result = await pool.query(query, params);
-      const countResult = await pool.query(`
-        SELECT COUNT(*) FROM users 
-        WHERE role != 'admin'
-        ${search ? `AND (name ILIKE '%${search}%' OR email ILIKE '%${search}%')` : ''}
-        ${status ? `AND status = '${status}'` : ''}
-        ${role ? `AND role = '${role}'` : ''}
-      `);
+      // Count query for pagination (same WHERE conditions, no LIMIT/OFFSET)
+      let countQuery = `
+        SELECT COUNT(*) as count
+        FROM users u
+        WHERE ${whereClause}
+      `;
+      
+      // Count params are same as main query but without LIMIT/OFFSET
+      const countParams = params.slice(0, -2);
+
+      const [result, countResult] = await Promise.all([
+        pool.query(query, params),
+        pool.query(countQuery, countParams)
+      ]);
 
       res.json({
         users: result.rows,
@@ -77,12 +102,13 @@ export const AdminController = {
           total: parseInt(countResult.rows[0].count),
           page: parseInt(page),
           limit: parseInt(limit),
-          pages: Math.ceil(countResult.rows[0].count / limit)
+          pages: Math.ceil(parseInt(countResult.rows[0].count) / parseInt(limit))
         }
       });
     } catch (error) {
       console.error("Error fetching users:", error);
-      res.status(500).json({ error: "Failed to fetch users" });
+      console.error("Error stack:", error.stack);
+      res.status(500).json({ error: "Failed to fetch users", details: error.message });
     }
   },
 

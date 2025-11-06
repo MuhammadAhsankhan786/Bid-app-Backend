@@ -7,13 +7,18 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "seed-products": "node src/scripts/seedSampleProducts.js",
+    "verify-integration": "node src/scripts/verifyIntegration.js",
+    "fix-db-schema": "node src/scripts/fixDatabaseSchema.js",
+    "health-check": "node src/scripts/systemHealthMonitor.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^6.17.1",
+    "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

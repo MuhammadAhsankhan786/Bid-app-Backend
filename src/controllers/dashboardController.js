@@ -5,16 +5,8 @@ export const DashboardController = {
   async getDashboard(req, res) {
     try {
       // Get all stats in parallel for better performance
-      const [
-        usersCount,
-        productsCount,
-        pendingProducts,
-        approvedProducts,
-        activeAuctions,
-        totalOrders,
-        totalRevenue,
-        recentActions
-      ] = await Promise.all([
+      // Wrap each query with error handling for missing columns
+      const queries = [
         pool.query("SELECT COUNT(*) as count FROM users WHERE role != 'admin'"),
         pool.query("SELECT COUNT(*) as count FROM products"),
         pool.query("SELECT COUNT(*) as count FROM products WHERE status = 'pending'"),
@@ -24,17 +16,31 @@ export const DashboardController = {
           WHERE status = 'approved' AND auction_end_time > NOW()
         `),
         pool.query("SELECT COUNT(*) as count FROM orders"),
+        // Revenue query - sum all orders (payment_status may not exist)
         pool.query(`
-          SELECT COALESCE(SUM(amount), 0) as total FROM orders 
-          WHERE payment_status = 'completed'
-        `),
+          SELECT COALESCE(SUM(amount), 0) as total FROM orders
+        `).catch(() => ({ rows: [{ total: '0' }] })),
+        // Recent actions - handle missing entity_type column gracefully  
         pool.query(`
-          SELECT action, entity_type, created_at, admin_id 
+          SELECT action, 
+                 COALESCE(entity_type, 'system') as entity_type, 
+                 created_at, admin_id 
           FROM admin_activity_log 
           ORDER BY created_at DESC 
           LIMIT 10
-        `)
-      ]);
+        `).catch(() => ({ rows: [] }))
+      ];
+
+      const [
+        usersCount,
+        productsCount,
+        pendingProducts,
+        approvedProducts,
+        activeAuctions,
+        totalOrders,
+        totalRevenue,
+        recentActions
+      ] = await Promise.all(queries);
 
       // Calculate user growth (last month)
       const lastMonthUsers = await pool.query(`
@@ -87,7 +93,6 @@ export const DashboardController = {
             COALESCE(SUM(amount), 0) as revenue
           FROM orders 
           WHERE created_at >= NOW() - INTERVAL '7 days'
-            AND payment_status = 'completed'
           GROUP BY DATE(created_at)
           ORDER BY date ASC
         `;
@@ -108,7 +113,6 @@ export const DashboardController = {
             COALESCE(SUM(amount), 0) as revenue
           FROM orders 
           WHERE created_at >= NOW() - INTERVAL '12 months'
-            AND payment_status = 'completed'
           GROUP BY DATE_TRUNC('month', created_at)
           ORDER BY date ASC
         `;

@@ -93,6 +93,21 @@ export const MobileProductController = {
   // GET /api/products (public - approved/live products)
   async getAllProducts(req, res) {
     try {
+      console.log('📦 GET /api/products - Request received');
+      console.log('   Query params:', req.query);
+      
+      // Check database connection
+      try {
+        const connectionTest = await pool.query('SELECT NOW() as current_time');
+        console.log('✅ Database connection: SUCCESS');
+        console.log('   Current DB time:', connectionTest.rows[0].current_time);
+      } catch (dbError) {
+        console.error('❌ Database connection: FAILED');
+        console.error('   Error:', dbError.message);
+        console.error('   Stack:', dbError.stack);
+        throw dbError;
+      }
+
       const { category, search, page = 1, limit = 20 } = req.query;
 
       let query = `
@@ -125,7 +140,17 @@ export const MobileProductController = {
       query += ` ORDER BY p.created_at DESC LIMIT $${paramCount++} OFFSET $${paramCount}`;
       params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
 
+      console.log('🔍 Executing query:', query);
+      console.log('   Query params:', params);
+
       const result = await pool.query(query, params);
+      console.log(`✅ Query executed: Found ${result.rows.length} products`);
+      
+      // If no products found, log suggestion to seed data
+      if (result.rows.length === 0) {
+        console.log('⚠️  No approved products found in database');
+        console.log('   Suggestion: Run "npm run seed-products" to insert sample products');
+      }
 
       // Get total count
       const countQuery = `
@@ -135,22 +160,55 @@ export const MobileProductController = {
         ${search ? `AND (title ILIKE '%${search}%' OR description ILIKE '%${search}%')` : ''}
       `;
       const countResult = await pool.query(countQuery);
+      const totalCount = parseInt(countResult.rows[0].count);
+      console.log(`📊 Total approved products: ${totalCount}`);
 
-      res.json({
+      const response = {
         success: true,
         data: result.rows,
         pagination: {
-          total: parseInt(countResult.rows[0].count),
+          total: totalCount,
           page: parseInt(page),
           limit: parseInt(limit),
-          pages: Math.ceil(countResult.rows[0].count / limit)
+          pages: Math.ceil(totalCount / limit)
         }
+      };
+
+      console.log('✅ Response sent:', {
+        success: response.success,
+        productsCount: response.data.length,
+        pagination: response.pagination
       });
+      
+      // Log sample product with current_bid verification
+      if (result.rows.length > 0) {
+        const sampleProduct = result.rows[0];
+        console.log('   Sample Product (first in response):');
+        console.log(`      ID: ${sampleProduct.id}`);
+        console.log(`      Title: ${sampleProduct.title}`);
+        console.log(`      Starting Price: $${sampleProduct.starting_price || 'N/A'}`);
+        console.log(`      Current Bid: $${sampleProduct.current_bid || sampleProduct.current_price || sampleProduct.starting_bid || '0'} ${sampleProduct.current_bid !== null && sampleProduct.current_bid !== undefined ? '✓' : '⚠️'}`);
+        console.log(`      Status: ${sampleProduct.status}`);
+        console.log(`      Seller: ${sampleProduct.seller_name || 'N/A'}`);
+        console.log(`      Category: ${sampleProduct.category_name || 'N/A'}`);
+        
+        // Log full JSON structure for verification
+        console.log('   Full product JSON (with current_bid):');
+        console.log(JSON.stringify(sampleProduct, null, 2));
+      } else {
+        console.log('   No products in response');
+      }
+
+      res.json(response);
     } catch (error) {
-      console.error("Error fetching products:", error);
+      console.error("❌ Error fetching products:", error);
+      console.error("   Error message:", error.message);
+      console.error("   Error code:", error.code);
+      console.error("   Error stack:", error.stack);
       res.status(500).json({
         success: false,
-        message: "Internal server error"
+        message: "Internal server error",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   },
