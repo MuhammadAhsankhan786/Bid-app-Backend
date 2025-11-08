@@ -87,6 +87,84 @@ export const AuctionController = {
         message: "Internal server error"
       });
     }
+  },
+
+  // ✅ Get Active Auctions (Admin)
+  async getActiveAuctions(req, res) {
+    try {
+      const result = await pool.query(`
+        SELECT 
+          p.id as product_id,
+          p.title,
+          p.description,
+          p.starting_bid,
+          p.current_bid,
+          p.image_url,
+          p.status,
+          p.auction_end_time,
+          u.name as seller_name,
+          u.email as seller_email,
+          buyer.name as highest_bidder_name,
+          buyer.email as highest_bidder_email,
+          COUNT(b.id) as total_bids,
+          EXTRACT(EPOCH FROM (p.auction_end_time - NOW())) / 3600 as hours_left
+        FROM products p
+        LEFT JOIN users u ON p.seller_id = u.id
+        LEFT JOIN users buyer ON p.highest_bidder_id = buyer.id
+        LEFT JOIN bids b ON b.product_id = p.id
+        WHERE p.status = 'approved' 
+          AND p.auction_end_time > NOW()
+        GROUP BY p.id, u.name, u.email, buyer.name, buyer.email
+        ORDER BY p.auction_end_time ASC
+      `);
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error("Error fetching active auctions:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
+  },
+
+  // ✅ Get Bids for Auction (Admin)
+  async getAuctionBids(req, res) {
+    try {
+      const { id } = req.params; // auction/product id
+
+      const result = await pool.query(`
+        SELECT 
+          b.id,
+          b.amount,
+          b.created_at,
+          u.id as user_id,
+          u.name as bidder_name,
+          u.email as bidder_email,
+          u.phone as bidder_phone,
+          p.title as product_title,
+          p.current_bid as highest_bid
+        FROM bids b
+        LEFT JOIN users u ON b.user_id = u.id
+        LEFT JOIN products p ON b.product_id = p.id
+        WHERE b.product_id = $1
+        ORDER BY b.amount DESC, b.created_at DESC
+      `, [id]);
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error("Error fetching auction bids:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
   }
 };
 

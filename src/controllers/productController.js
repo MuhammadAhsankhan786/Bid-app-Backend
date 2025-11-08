@@ -202,6 +202,31 @@ export const ProductController = {
       console.error("Error fetching product:", error);
       res.status(500).json({ error: "Failed to fetch product" });
     }
+  },
+
+  // ✅ Get Product Documents
+  async getProductDocuments(req, res) {
+    try {
+      const { id } = req.params;
+
+      const result = await pool.query(`
+        SELECT 
+          d.*,
+          p.title as product_title
+        FROM documents d
+        LEFT JOIN products p ON d.product_id = p.id
+        WHERE d.product_id = $1
+        ORDER BY d.uploaded_at DESC
+      `, [id]);
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      console.error("Error fetching product documents:", error);
+      res.status(500).json({ error: "Failed to fetch product documents" });
+    }
   }
 };
 

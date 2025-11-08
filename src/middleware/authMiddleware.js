@@ -57,17 +57,27 @@ export const verifyAdmin = async (req, res, next) => {
         }
       } else {
         const user = userResult.rows[0];
-        if (user.role !== 'admin') {
-          return res.status(403).json({ message: "Forbidden - Admin only" });
+        // Allow superadmin, moderator, viewer roles (map legacy 'admin' to 'superadmin')
+        const allowedRoles = ['admin', 'superadmin', 'moderator', 'viewer'];
+        const userRole = user.role?.toLowerCase();
+        if (!allowedRoles.includes(userRole)) {
+          return res.status(403).json({ message: "Forbidden - Admin access required" });
         }
-        req.user = { id: user.id, phone: user.phone, role: user.role };
+        // Map legacy 'admin' to 'superadmin' for consistency
+        const normalizedRole = userRole === 'admin' ? 'superadmin' : userRole;
+        req.user = { id: user.id, phone: user.phone, role: normalizedRole };
       }
     } else if (decoded.role) {
       // Email-based authentication
-      if (decoded.role !== "admin") {
-        return res.status(403).json({ message: "Forbidden - Admin only" });
+      // Allow superadmin, moderator, viewer roles (map legacy 'admin' to 'superadmin')
+      const allowedRoles = ['admin', 'superadmin', 'moderator', 'viewer'];
+      const userRole = decoded.role?.toLowerCase();
+      if (!allowedRoles.includes(userRole)) {
+        return res.status(403).json({ message: "Forbidden - Admin access required" });
       }
-      req.user = decoded;
+      // Map legacy 'admin' to 'superadmin' for consistency
+      const normalizedRole = userRole === 'admin' ? 'superadmin' : userRole;
+      req.user = { ...decoded, role: normalizedRole };
     } else {
       return res.status(401).json({ message: "Invalid token" });
     }

@@ -1,0 +1,9 @@
+{
+    "scripts": {
+      "onStart": "cursor sql:run ./db/init_bidmaster.sql"
+    },
+    "env": {
+      "DATABASE_URL": "${DATABASE_URL}"
+    }
+  }
+  

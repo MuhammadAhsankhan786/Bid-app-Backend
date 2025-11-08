@@ -1,5 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import adminRoutes from "./Routes/adminRoutes.js";
 import authRoutes from "./Routes/authRoutes.js";
 import productRoutes from "./Routes/productRoutes.js";
@@ -8,6 +10,9 @@ import auctionRoutes from "./Routes/auctionRoutes.js";
 import orderRoutes from "./Routes/orderRoutes.js";
 import notificationRoutes from "./Routes/notificationRoutes.js";
 import cors from "cors";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 const app = express();
@@ -84,6 +89,9 @@ app.use((req, res, next) => {
 
 // ✅ JSON parsing after CORS
 app.use(express.json());
+
+// ✅ Serve static files (uploads)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 /* ======================================================
    ✅ Routes

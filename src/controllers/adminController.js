@@ -5,28 +5,39 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 
 export const AdminController = {
-  // ✅ Admin Login
+  // ✅ Admin Login (supports superadmin, moderator, viewer roles)
   async login(req, res) {
     const { email, password } = req.body;
     const user = await UserModel.findByEmail(email);
 
-    if (!user || user.role !== "admin")
+    // Check if user exists and has admin role (superadmin, moderator, viewer, or legacy admin)
+    const allowedRoles = ['admin', 'superadmin', 'moderator', 'viewer'];
+    const userRole = user?.role?.toLowerCase();
+    
+    if (!user || !allowedRoles.includes(userRole)) {
       return res.status(400).json({ message: "Invalid credentials" });
+    }
 
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(400).json({ message: "Invalid credentials" });
 
-    
+    // Normalize role (map legacy 'admin' to 'superadmin')
+    const normalizedRole = userRole === 'admin' ? 'superadmin' : userRole;
 
     const token = jwt.sign(
-      { id: user.id, role: user.role },
+      { id: user.id, role: normalizedRole },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
     res.json({
       token,
-      admin: { id: user.id, name: user.name, email: user.email }
+      admin: { 
+        id: user.id, 
+        name: user.name, 
+        email: user.email,
+        role: normalizedRole
+      }
     });
   },
 
@@ -228,6 +239,144 @@ export const AdminController = {
     } catch (error) {
       console.error("Error rejecting product:", error);
       res.status(500).json({ error: "Failed to reject product" });
+    }
+  },
+
+  // ✅ Create User
+  async createUser(req, res) {
+    try {
+      const { name, email, password, phone, role } = req.body;
+      
+      if (!name || !email || !password || !role) {
+        return res.status(400).json({ error: "Name, email, password, and role are required" });
+      }
+
+      // Check if user already exists
+      const existingUser = await pool.query(
+        "SELECT id FROM users WHERE email = $1",
+        [email]
+      );
+
+      if (existingUser.rows.length > 0) {
+        return res.status(400).json({ error: "User with this email already exists" });
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Insert user
+      const result = await pool.query(
+        `INSERT INTO users (name, email, password, phone, role, status)
+         VALUES ($1, $2, $3, $4, $5, 'approved')
+         RETURNING id, name, email, phone, role, status, created_at`,
+        [name, email, hashedPassword, phone || null, role]
+      );
+
+      // Log admin action
+      await pool.query(
+        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
+         VALUES ($1, 'User created', 'user', $2)`,
+        [req.user.id, result.rows[0].id]
+      );
+
+      res.status(201).json({ message: "User created successfully", user: result.rows[0] });
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  },
+
+  // ✅ Update User
+  async updateUser(req, res) {
+    try {
+      const { id } = req.params;
+      const { name, email, phone, status } = req.body;
+
+      const updates = [];
+      const params = [];
+      let paramCount = 1;
+
+      if (name) {
+        updates.push(`name = $${paramCount++}`);
+        params.push(name);
+      }
+      if (email) {
+        updates.push(`email = $${paramCount++}`);
+        params.push(email);
+      }
+      if (phone !== undefined) {
+        updates.push(`phone = $${paramCount++}`);
+        params.push(phone);
+      }
+      if (status) {
+        updates.push(`status = $${paramCount++}`);
+        params.push(status);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: "No fields to update" });
+      }
+
+      params.push(id);
+      const result = await pool.query(
+        `UPDATE users 
+         SET ${updates.join(', ')}
+         WHERE id = $${paramCount} AND role != 'admin'
+         RETURNING id, name, email, phone, role, status, created_at`,
+        params
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: "User not found or cannot be updated" });
+      }
+
+      // Log admin action
+      await pool.query(
+        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
+         VALUES ($1, 'User updated', 'user', $2)`,
+        [req.user.id, id]
+      );
+
+      res.json({ message: "User updated successfully", user: result.rows[0] });
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  },
+
+  // ✅ Update User Role
+  async updateUserRole(req, res) {
+    try {
+      const { id } = req.params;
+      const { role } = req.body;
+
+      if (!role || !['buyer', 'seller', 'admin'].includes(role)) {
+        return res.status(400).json({ error: "Valid role (buyer, seller, admin) is required" });
+      }
+
+      const result = await pool.query(
+        `UPDATE users 
+         SET role = $1 
+         WHERE id = $2 AND role != 'admin'
+         RETURNING id, name, email, role, status`,
+        [role, id]
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: "User not found or cannot be updated" });
+      }
+
+      // Log admin action
+      await pool.query(
+        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id, details)
+         VALUES ($1, 'User role updated', 'user', $2, $3)`,
+        [req.user.id, id, JSON.stringify({ new_role: role })]
+      );
+
+      res.json({ message: "User role updated successfully", user: result.rows[0] });
+    } catch (error) {
+      console.error("Error updating user role:", error);
+      res.status(500).json({ error: "Failed to update user role" });
     }
   },
 };

@@ -112,7 +112,12 @@ export const MobileProductController = {
 
       let query = `
         SELECT 
-          p.*,
+          p.id, p.seller_id, p.title, p.description, p.image_url, p.status,
+          p.created_at, p.category_id, p.highest_bidder_id, p.auction_end_time,
+          p.starting_price, p.starting_bid,
+          COALESCE(NULLIF(p.current_bid, 0), NULLIF(p.current_price, 0), p.starting_bid, p.starting_price, 0) as current_bid,
+          COALESCE(NULLIF(p.current_price, 0), NULLIF(p.current_bid, 0), p.starting_price, p.starting_bid, 0) as current_price,
+          COALESCE(p.total_bids, (SELECT COUNT(*) FROM bids WHERE product_id = p.id), 0) as total_bids,
           u.name as seller_name,
           c.name as category_name,
           buyer.name as highest_bidder_name,
@@ -126,9 +131,19 @@ export const MobileProductController = {
       const params = [];
       let paramCount = 1;
 
-      if (category) {
-        query += ` AND p.category_id = $${paramCount++}`;
-        params.push(category);
+      if (category && category !== 'All' && category !== 'all') {
+        // Handle category filter - can be ID (number) or name/slug (string)
+        const categoryNum = parseInt(category);
+        if (!isNaN(categoryNum) && categoryNum.toString() === category.toString()) {
+          // Category is a number (ID)
+          query += ` AND p.category_id = $${paramCount++}`;
+          params.push(categoryNum);
+        } else {
+          // Category is a string (name) - match by name
+          query += ` AND LOWER(c.name) = LOWER($${paramCount})`;
+          params.push(category);
+          paramCount++;
+        }
       }
 
       if (search) {
@@ -205,10 +220,25 @@ export const MobileProductController = {
       console.error("   Error message:", error.message);
       console.error("   Error code:", error.code);
       console.error("   Error stack:", error.stack);
+      
+      // Return more specific error messages
+      let errorMessage = "Internal server error";
+      if (error.code === '42703') {
+        errorMessage = "Database column error - please check schema";
+      } else if (error.code === '42P01') {
+        errorMessage = "Database table not found";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       res.status(500).json({
         success: false,
-        message: "Internal server error",
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        message: errorMessage,
+        error: process.env.NODE_ENV === 'development' ? {
+          message: error.message,
+          code: error.code,
+          stack: error.stack
+        } : undefined
       });
     }
   },

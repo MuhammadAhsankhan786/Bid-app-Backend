@@ -8,6 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "seed:mock": "node src/scripts/seedMockUsers.js",
+    "verify:mock": "node src/scripts/verifyMockUsers.js",
     "seed-products": "node src/scripts/seedSampleProducts.js",
     "verify-integration": "node src/scripts/verifyIntegration.js",
     "fix-db-schema": "node src/scripts/fixDatabaseSchema.js",
@@ -24,6 +26,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
     "pg": "^8.16.3",
     "twilio": "^5.10.4"
   },

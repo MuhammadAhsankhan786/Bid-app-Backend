@@ -140,6 +140,86 @@ export const OrderController = {
       console.error("Error updating order:", error);
       res.status(500).json({ error: "Failed to update order" });
     }
+  },
+
+  // ✅ Get Payments
+  async getPayments(req, res) {
+    try {
+      const { status, method, user_id, page = 1, limit = 20 } = req.query;
+
+      let query = `
+        SELECT 
+          p.*,
+          u.name as user_name,
+          u.email as user_email,
+          u.phone as user_phone
+        FROM payments p
+        LEFT JOIN users u ON p.user_id = u.id
+        WHERE 1=1
+      `;
+      const params = [];
+      let paramCount = 1;
+
+      if (status) {
+        query += ` AND p.status = $${paramCount++}`;
+        params.push(status);
+      }
+
+      if (method) {
+        query += ` AND p.method = $${paramCount++}`;
+        params.push(method);
+      }
+
+      if (user_id) {
+        query += ` AND p.user_id = $${paramCount++}`;
+        params.push(user_id);
+      }
+
+      query += ` ORDER BY p.created_at DESC LIMIT $${paramCount++} OFFSET $${paramCount}`;
+      params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+
+      const result = await pool.query(query, params);
+
+      // Get total count
+      let countQuery = `
+        SELECT COUNT(*) as count
+        FROM payments p
+        WHERE 1=1
+      `;
+      const countParams = [];
+      let countParamCount = 1;
+
+      if (status) {
+        countQuery += ` AND p.status = $${countParamCount++}`;
+        countParams.push(status);
+      }
+
+      if (method) {
+        countQuery += ` AND p.method = $${countParamCount++}`;
+        countParams.push(method);
+      }
+
+      if (user_id) {
+        countQuery += ` AND p.user_id = $${countParamCount++}`;
+        countParams.push(user_id);
+      }
+
+      const countResult = await pool.query(countQuery, countParams);
+
+      res.json({
+        success: true,
+        data: result.rows,
+        pagination: {
+          total: parseInt(countResult.rows[0].count),
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(parseInt(countResult.rows[0].count) / parseInt(limit))
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching payments:", error);
+      res.status(500).json({ error: "Failed to fetch payments" });
+    }
   }
 };
 

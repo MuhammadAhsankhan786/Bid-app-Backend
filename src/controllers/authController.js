@@ -51,7 +51,132 @@ function isValidIraqPhone(phone) {
 }
 
 export const AuthController = {
-  // POST /api/auth/send-otp
+  // POST /api/auth/login-phone (Admin Panel - Mock OTP)
+  async loginPhone(req, res) {
+    try {
+      console.log('📱 Login Phone Request:', {
+        body: req.body,
+        phone: req.body?.phone,
+        otp: req.body?.otp,
+        phoneType: typeof req.body?.phone,
+        otpType: typeof req.body?.otp,
+      });
+
+      const { phone, otp } = req.body;
+
+      if (!phone || !otp) {
+        console.log('❌ Missing phone or OTP:', { phone: !!phone, otp: !!otp });
+        return res.status(400).json({ 
+          success: false, 
+          message: "Phone number and OTP are required" 
+        });
+      }
+
+      // Normalize phone first
+      const normalizedPhone = normalizeIraqPhone(phone);
+      console.log('📱 Phone normalization:', { original: phone, normalized: normalizedPhone });
+      
+      // Validate phone format
+      if (!normalizedPhone) {
+        console.log('❌ Phone normalization failed:', { original: phone });
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        });
+      }
+      
+      // Validate normalized phone format
+      if (!isValidIraqPhone(phone)) {
+        console.log('❌ Invalid phone format:', { original: phone, normalized: normalizedPhone });
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        });
+      }
+
+      // Verify mock OTP (1234)
+      if (otp !== '1234') {
+        return res.status(401).json({ 
+          success: false, 
+          message: "Invalid OTP. Use 1234 for testing." 
+        });
+      }
+
+      // Check if user exists in database (support both admin and mobile users)
+      // Try both normalized and original phone formats
+      const userResult = await pool.query(
+        `SELECT id, name, email, phone, role, status 
+         FROM users 
+         WHERE phone = $1 OR phone = $2`,
+        [normalizedPhone, phone]
+      );
+      
+      console.log('🔍 Database query:', {
+        normalizedPhone,
+        originalPhone: phone,
+        foundUsers: userResult.rows.length
+      });
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "Phone number not registered. Please contact administrator or register first." 
+        });
+      }
+
+      const user = userResult.rows[0];
+
+      // Check if user is blocked
+      if (user.status === 'blocked') {
+        return res.status(403).json({ 
+          success: false, 
+          message: "Account is blocked" 
+        });
+      }
+
+      // Normalize role (map legacy 'admin' to 'superadmin')
+      let userRole = user.role?.toLowerCase();
+      if (userRole === 'admin') {
+        userRole = 'superadmin';
+      }
+
+      // Generate JWT token with user ID and role
+      const token = jwt.sign(
+        { 
+          id: user.id, 
+          phone: user.phone, 
+          role: userRole 
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || "24h" }
+      );
+
+      // Return user data with default values for null fields (dev mode support)
+      res.json({
+        success: true,
+        message: "Login successful",
+        token,
+        role: userRole,
+        user: {
+          id: user.id,
+          name: user.name || "Super Admin",
+          email: user.email || "admin@bidmaster.dev",
+          phone: user.phone,
+          role: userRole,
+          status: user.status,
+          city: user.city || "Baghdad"
+        }
+      });
+    } catch (error) {
+      console.error("Error during phone login:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Internal server error" 
+      });
+    }
+  },
+
+  // POST /api/auth/send-otp (kept for mobile app compatibility)
   async sendOTP(req, res) {
     try {
       const { phone } = req.body;
