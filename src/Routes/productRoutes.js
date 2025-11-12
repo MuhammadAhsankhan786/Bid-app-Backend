@@ -6,11 +6,13 @@ const router = express.Router();
 
 // Public routes
 router.get("/", MobileProductController.getAllProducts);
-router.get("/:id", MobileProductController.getProductById);
 
-// Protected routes (seller only for create, user for mine)
-router.post("/create", verifyUser, MobileProductController.createProduct);
+// Protected routes - MUST come before /:id route to avoid route conflicts
 router.get("/mine", verifyUser, MobileProductController.getMyProducts);
+router.post("/create", verifyUser, MobileProductController.createProduct);
+
+// Dynamic routes - MUST come last
+router.get("/:id", MobileProductController.getProductById);
 
 export default router;
 

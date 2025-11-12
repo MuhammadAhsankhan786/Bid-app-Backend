@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import { fixImageUrlsInResponse, fixImageUrlInItem } from "../utils/imageUrlFixer.js";
 
 export const AuctionController = {
   // GET /api/auction/winner/:productId
@@ -57,26 +58,30 @@ export const AuctionController = {
         });
       }
 
+      // Fix invalid image URL in product data
+      const fixedProduct = fixImageUrlInItem(product);
+
       res.json({
         success: true,
         data: {
           product: {
-            id: product.id,
-            title: product.title,
-            final_bid: product.current_bid,
-            auction_end_time: product.auction_end_time
+            id: fixedProduct.id,
+            title: fixedProduct.title,
+            final_bid: fixedProduct.current_bid,
+            auction_end_time: fixedProduct.auction_end_time,
+            image_url: fixedProduct.image_url
           },
           winner: {
-            id: product.winner_id,
-            name: product.winner_name,
-            email: product.winner_email,
-            phone: product.winner_phone
+            id: fixedProduct.winner_id,
+            name: fixedProduct.winner_name,
+            email: fixedProduct.winner_email,
+            phone: fixedProduct.winner_phone
           },
           seller: {
-            id: product.seller_id,
-            name: product.seller_name,
-            email: product.seller_email,
-            phone: product.seller_phone
+            id: fixedProduct.seller_id,
+            name: fixedProduct.seller_name,
+            email: fixedProduct.seller_email,
+            phone: fixedProduct.seller_phone
           }
         }
       });
@@ -118,9 +123,12 @@ export const AuctionController = {
         ORDER BY p.auction_end_time ASC
       `);
 
+      // Fix invalid image URLs in response
+      const fixedData = fixImageUrlsInResponse(result.rows);
+
       res.json({
         success: true,
-        data: result.rows
+        data: fixedData
       });
     } catch (error) {
       console.error("Error fetching active auctions:", error);

@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import { fixImageUrlsInResponse } from "../utils/imageUrlFixer.js";
 
 export const MobileOrderController = {
   // POST /api/orders/create
@@ -167,9 +168,12 @@ export const MobileOrderController = {
 
       const result = await pool.query(query, params);
 
+      // Fix invalid image URLs in response
+      const fixedData = fixImageUrlsInResponse(result.rows);
+
       res.json({
         success: true,
-        data: result.rows
+        data: fixedData
       });
     } catch (error) {
       console.error("Error fetching orders:", error);

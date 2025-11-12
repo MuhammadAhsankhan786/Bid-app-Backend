@@ -8,12 +8,17 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "monitor": "node src/scripts/systemMonitor.js",
+    "auto-monitor": "node src/scripts/autoHealthMonitor.js",
+    "start-full": "powershell -ExecutionPolicy Bypass -File ..\\start-bidmaster.ps1",
     "seed:mock": "node src/scripts/seedMockUsers.js",
     "verify:mock": "node src/scripts/verifyMockUsers.js",
     "seed-products": "node src/scripts/seedSampleProducts.js",
+    "seed-demo": "node src/scripts/seedDemoData.js",
     "verify-integration": "node src/scripts/verifyIntegration.js",
     "fix-db-schema": "node src/scripts/fixDatabaseSchema.js",
-    "health-check": "node src/scripts/systemHealthMonitor.js"
+    "health-check": "node src/scripts/systemHealthMonitor.js",
+    "verify-db": "node src/scripts/verifyDatabaseSchema.js"
   },
   "keywords": [],
   "author": "",

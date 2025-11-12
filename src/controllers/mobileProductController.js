@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import { fixImageUrlsInResponse, fixImageUrlInItem } from "../utils/imageUrlFixer.js";
 
 export const MobileProductController = {
   // POST /api/products/create
@@ -57,11 +58,49 @@ export const MobileProductController = {
   // GET /api/products/mine
   async getMyProducts(req, res) {
     try {
+      console.log('📦 GET /api/products/mine - Request received');
+      console.log('   Headers:', JSON.stringify(req.headers, null, 2));
+      
+      // Check if user is authenticated
+      if (!req.user || !req.user.id) {
+        console.error('❌ Authentication error: req.user is missing');
+        console.error('   req.user:', req.user);
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized - User not authenticated"
+        });
+      }
+
       const userId = req.user.id;
       const { status } = req.query;
 
+      console.log('   User ID:', userId);
+      console.log('   Status filter:', status || 'none');
+      console.log('   User role:', req.user.role);
+      console.log('   User status:', req.user.status);
+
+      // Test database connection first
+      try {
+        const connectionTest = await pool.query('SELECT NOW() as current_time');
+        console.log('✅ Database connection: SUCCESS');
+      } catch (dbError) {
+        console.error('❌ Database connection: FAILED');
+        console.error('   Error:', dbError.message);
+        console.error('   Code:', dbError.code);
+        throw dbError;
+      }
+
+      // Build query - handle case where categories table might not exist
       let query = `
-        SELECT p.*, c.name as category_name
+        SELECT 
+          p.id, p.seller_id, p.title, p.description, p.image_url, p.status,
+          p.created_at, p.category_id, p.highest_bidder_id, p.auction_end_time,
+          COALESCE(p.starting_price, 0) as starting_price,
+          COALESCE(p.starting_bid, 0) as starting_bid,
+          COALESCE(p.current_price, 0) as current_price,
+          COALESCE(p.current_bid, 0) as current_bid,
+          COALESCE(p.total_bids, 0) as total_bids,
+          COALESCE(c.name, 'Uncategorized') as category_name
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.seller_id = $1
@@ -75,17 +114,52 @@ export const MobileProductController = {
 
       query += ` ORDER BY p.created_at DESC`;
 
-      const result = await pool.query(query, params);
+      console.log('🔍 Executing query:', query);
+      console.log('   Query params:', params);
 
+      const result = await pool.query(query, params);
+      console.log(`✅ Query executed: Found ${result.rows.length} products for seller ${userId}`);
+
+      // Fix invalid image URLs in response - wrap in try-catch for safety
+      let fixedData;
+      try {
+        fixedData = fixImageUrlsInResponse(result.rows);
+        console.log('✅ Image URLs fixed successfully');
+      } catch (fixError) {
+        console.error('⚠️ Error fixing image URLs, using raw data:', fixError.message);
+        console.error('   Fix error stack:', fixError.stack);
+        fixedData = result.rows; // Use raw data if fix fails
+      }
+
+      console.log('📤 Sending response with', fixedData?.length || 0, 'products');
       res.json({
         success: true,
-        data: result.rows
+        data: fixedData || []
       });
     } catch (error) {
-      console.error("Error fetching products:", error);
+      console.error("❌ Error fetching my products:", error);
+      console.error("   Error message:", error.message);
+      console.error("   Error code:", error.code);
+      console.error("   Error stack:", error.stack);
+      
+      // Return more specific error messages
+      let errorMessage = "Internal server error";
+      if (error.code === '42703') {
+        errorMessage = "Database column error - please check schema";
+      } else if (error.code === '42P01') {
+        errorMessage = "Database table not found - please run migrations";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       res.status(500).json({
         success: false,
-        message: "Internal server error"
+        message: errorMessage,
+        error: process.env.NODE_ENV === 'development' ? {
+          message: error.message,
+          code: error.code,
+          stack: error.stack
+        } : undefined
       });
     }
   },
@@ -167,20 +241,50 @@ export const MobileProductController = {
         console.log('   Suggestion: Run "npm run seed-products" to insert sample products');
       }
 
-      // Get total count
-      const countQuery = `
-        SELECT COUNT(*) FROM products 
-        WHERE status = 'approved'
-        ${category ? `AND category_id = ${category}` : ''}
-        ${search ? `AND (title ILIKE '%${search}%' OR description ILIKE '%${search}%')` : ''}
+      // Get total count (using same filters as main query)
+      let countQuery = `
+        SELECT COUNT(*) as count
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.id
+        WHERE p.status = 'approved'
       `;
-      const countResult = await pool.query(countQuery);
+      const countParams = [];
+      let countParamCount = 1;
+
+      if (category && category !== 'All' && category !== 'all') {
+        // Handle category filter - same logic as main query
+        const categoryNum = parseInt(category);
+        if (!isNaN(categoryNum) && categoryNum.toString() === category.toString()) {
+          // Category is a number (ID)
+          countQuery += ` AND p.category_id = $${countParamCount++}`;
+          countParams.push(categoryNum);
+        } else {
+          // Category is a string (name) - match by name
+          countQuery += ` AND LOWER(c.name) = LOWER($${countParamCount})`;
+          countParams.push(category);
+          countParamCount++;
+        }
+      }
+
+      if (search) {
+        countQuery += ` AND (p.title ILIKE $${countParamCount++} OR p.description ILIKE $${countParamCount})`;
+        countParams.push(`%${search}%`, `%${search}%`);
+        countParamCount++;
+      }
+
+      console.log('🔍 Executing count query:', countQuery);
+      console.log('   Count params:', countParams);
+
+      const countResult = await pool.query(countQuery, countParams);
       const totalCount = parseInt(countResult.rows[0].count);
       console.log(`📊 Total approved products: ${totalCount}`);
 
+      // Fix invalid image URLs in response
+      const fixedData = fixImageUrlsInResponse(result.rows);
+      
       const response = {
         success: true,
-        data: result.rows,
+        data: fixedData,
         pagination: {
           total: totalCount,
           page: parseInt(page),
@@ -277,9 +381,12 @@ export const MobileProductController = {
         });
       }
 
+      // Fix invalid image URL in response
+      const fixedProduct = fixImageUrlInItem(result.rows[0]);
+
       res.json({
         success: true,
-        data: result.rows[0]
+        data: fixedProduct
       });
     } catch (error) {
       console.error("Error fetching product:", error);

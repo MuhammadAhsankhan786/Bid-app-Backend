@@ -10,6 +10,7 @@ import auctionRoutes from "./Routes/auctionRoutes.js";
 import orderRoutes from "./Routes/orderRoutes.js";
 import notificationRoutes from "./Routes/notificationRoutes.js";
 import cors from "cors";
+import pool from "./config/db.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,17 +23,23 @@ const app = express();
    Works for Express v5 (no crash on wildcard)
 ====================================================== */
 
-// CORS configuration - allow localhost, Render & future web app
+// CORS configuration - allow localhost, Render, LAN IPs & future web app
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true); // mobile, Postman
     if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
       return callback(null, true);
     }
+    if (origin.includes("10.0.2.2")) {
+      return callback(null, true); // Android emulator
+    }
+    if (origin.match(/^http:\/\/192\.168\.\d+\.\d+:\d+$/)) {
+      return callback(null, true); // LAN IPs for physical devices
+    }
     if (origin.includes("bidmaster-api.onrender.com")) {
       return callback(null, true);
     }
-    // Allow all temporarily
+    // Allow all temporarily for development
     return callback(null, true);
   },
   credentials: true,
@@ -104,8 +111,31 @@ app.use("/api/auction", auctionRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/notifications", notificationRoutes);
 
-// Health check route
+// Health check routes
 app.get("/", (req, res) => res.send("BidMaster Admin API running ✅"));
+
+// API health check endpoint for monitoring
+app.get("/api/health", async (req, res) => {
+  try {
+    // Test database connection
+    const dbTest = await pool.query('SELECT NOW() as current_time');
+    res.json({
+      status: 'healthy',
+      database: 'connected',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      dbTime: dbTest.rows[0].current_time
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      database: 'disconnected',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      error: error.message
+    });
+  }
+});
 
 /* ======================================================
    ✅ Start Server

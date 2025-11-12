@@ -117,9 +117,41 @@ export const ProductController = {
   // Approve product
   async approveProduct(req, res) {
     try {
+      console.log('🧩 [ApproveProduct] Request received:', {
+        productId: req.params.id,
+        userId: req.user?.id,
+        userRole: req.user?.role
+      });
+
       const { id } = req.params;
       const { auctionEndTime } = req.body;
 
+      // Validate product ID
+      if (!id || isNaN(parseInt(id))) {
+        console.log('🧩 [ApproveProduct] Error: Invalid product ID', { id });
+        return res.status(400).json({ 
+          success: false,
+          error: "Invalid product ID" 
+        });
+      }
+
+      // Check if product exists
+      const productCheck = await pool.query(
+        "SELECT id, title, status FROM products WHERE id = $1",
+        [id]
+      );
+
+      if (productCheck.rows.length === 0) {
+        console.log('🧩 [ApproveProduct] Error: Product not found', { id });
+        return res.status(404).json({ 
+          success: false,
+          error: "Product not found" 
+        });
+      }
+
+      console.log('🧩 [ApproveProduct] Product found:', productCheck.rows[0]);
+
+      // Update product status
       const result = await pool.query(
         `UPDATE products 
          SET status = 'approved', 
@@ -130,49 +162,165 @@ export const ProductController = {
       );
 
       if (result.rowCount === 0) {
-        return res.status(404).json({ error: "Product not found" });
+        console.log('🧩 [ApproveProduct] Error: Update returned no rows', { id });
+        return res.status(404).json({ 
+          success: false,
+          error: "Product not found" 
+        });
       }
 
-      // Log admin action
-      await pool.query(
-        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
-         VALUES ($1, 'Product approved', 'product', $2)`,
-        [req.user.id, id]
-      );
+      console.log('🧩 [ApproveProduct] Product updated successfully:', {
+        id: result.rows[0].id,
+        title: result.rows[0].title,
+        status: result.rows[0].status
+      });
 
-      res.json({ success: true, product: result.rows[0] });
+      // Log admin action (optional - don't fail if table doesn't exist)
+      try {
+        // Check if admin_activity_log table exists
+        const tableCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'admin_activity_log'
+          )
+        `);
+
+        if (tableCheck.rows[0].exists) {
+          await pool.query(
+            `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
+             VALUES ($1, 'Product approved', 'product', $2)`,
+            [req.user.id, id]
+          );
+          console.log('🧩 [ApproveProduct] Admin action logged');
+        } else {
+          console.log('🧩 [ApproveProduct] Warning: admin_activity_log table does not exist, skipping log');
+        }
+      } catch (logError) {
+        // Don't fail the request if logging fails
+        console.log('🧩 [ApproveProduct] Warning: Could not log admin action:', logError.message);
+      }
+
+      res.json({ 
+        success: true, 
+        product: result.rows[0],
+        message: "Product approved successfully"
+      });
     } catch (error) {
-      console.error("Error approving product:", error);
-      res.status(500).json({ error: "Failed to approve product" });
+      console.error("🧩 [ApproveProduct] Error approving product:", {
+        error: error.message,
+        code: error.code,
+        detail: error.detail,
+        stack: error.stack
+      });
+      
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to approve product",
+        message: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 
   // Reject product
   async rejectProduct(req, res) {
     try {
+      console.log('🧩 [RejectProduct] Request received:', {
+        productId: req.params.id,
+        userId: req.user?.id,
+        userRole: req.user?.role
+      });
+
       const { id } = req.params;
       const { reason } = req.body;
 
+      // Validate product ID
+      if (!id || isNaN(parseInt(id))) {
+        console.log('🧩 [RejectProduct] Error: Invalid product ID', { id });
+        return res.status(400).json({ 
+          success: false,
+          error: "Invalid product ID" 
+        });
+      }
+
+      // Check if product exists
+      const productCheck = await pool.query(
+        "SELECT id, title, status FROM products WHERE id = $1",
+        [id]
+      );
+
+      if (productCheck.rows.length === 0) {
+        console.log('🧩 [RejectProduct] Error: Product not found', { id });
+        return res.status(404).json({ 
+          success: false,
+          error: "Product not found" 
+        });
+      }
+
+      console.log('🧩 [RejectProduct] Product found:', productCheck.rows[0]);
+
+      // Update product status
       const result = await pool.query(
         `UPDATE products SET status = 'rejected' WHERE id = $1 RETURNING *`,
         [id]
       );
 
       if (result.rowCount === 0) {
-        return res.status(404).json({ error: "Product not found" });
+        console.log('🧩 [RejectProduct] Error: Update returned no rows', { id });
+        return res.status(404).json({ 
+          success: false,
+          error: "Product not found" 
+        });
       }
 
-      // Log admin action
-      await pool.query(
-        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id, details)
-         VALUES ($1, 'Product rejected', 'product', $2, $3)`,
-        [req.user.id, id, JSON.stringify({ reason: reason || 'No reason provided' })]
-      );
+      console.log('🧩 [RejectProduct] Product updated successfully:', {
+        id: result.rows[0].id,
+        title: result.rows[0].title,
+        status: result.rows[0].status
+      });
 
-      res.json({ success: true, product: result.rows[0] });
+      // Log admin action (optional - don't fail if table doesn't exist)
+      try {
+        // Check if admin_activity_log table exists
+        const tableCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'admin_activity_log'
+          )
+        `);
+
+        if (tableCheck.rows[0].exists) {
+          await pool.query(
+            `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id, details)
+             VALUES ($1, 'Product rejected', 'product', $2, $3)`,
+            [req.user.id, id, JSON.stringify({ reason: reason || 'No reason provided' })]
+          );
+          console.log('🧩 [RejectProduct] Admin action logged');
+        } else {
+          console.log('🧩 [RejectProduct] Warning: admin_activity_log table does not exist, skipping log');
+        }
+      } catch (logError) {
+        // Don't fail the request if logging fails
+        console.log('🧩 [RejectProduct] Warning: Could not log admin action:', logError.message);
+      }
+
+      res.json({ 
+        success: true, 
+        product: result.rows[0],
+        message: "Product rejected successfully"
+      });
     } catch (error) {
-      console.error("Error rejecting product:", error);
-      res.status(500).json({ error: "Failed to reject product" });
+      console.error("🧩 [RejectProduct] Error rejecting product:", {
+        error: error.message,
+        code: error.code,
+        detail: error.detail,
+        stack: error.stack
+      });
+      
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to reject product",
+        message: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 
