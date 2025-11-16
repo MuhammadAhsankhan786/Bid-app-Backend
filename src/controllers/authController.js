@@ -52,7 +52,23 @@ function isValidIraqPhone(phone) {
 }
 
 export const AuthController = {
-  // POST /api/auth/login-phone (Admin Panel - Mock OTP)
+  /**
+   * POST /api/auth/login-phone
+   * 
+   * ADMIN PANEL LOGIN ENDPOINT
+   * ===========================
+   * This endpoint is used by the Admin Panel for phone-based login.
+   * 
+   * OTP SYSTEM:
+   * - Uses ADMIN_MOCK_OTP_ENABLED and ADMIN_MOCK_OTP_VALUE environment variables
+   * - Admin Panel OTP is completely independent from Mobile App OTP
+   * - Does NOT use otpStore (mobile OTP storage)
+   * - Does NOT use MOCK_OTP or MOCK_OTP_VALUE (those are for mobile app only)
+   * 
+   * Environment Variables:
+   * - ADMIN_MOCK_OTP_ENABLED: Set to 'true' to enable mock OTP for admin panel
+   * - ADMIN_MOCK_OTP_VALUE: The mock OTP value (default: '123456')
+   */
   async loginPhone(req, res) {
     try {
       console.log('📱 Login Phone Request:', {
@@ -95,48 +111,40 @@ export const AuthController = {
         });
       }
 
-      // Verify OTP (mock mode or real)
-      const MOCK_OTP_ENABLED = process.env.MOCK_OTP === 'true';
-      const MOCK_OTP_VALUE = process.env.MOCK_OTP_VALUE || '1234';
+      // ============================================================
+      // ADMIN PANEL OTP VERIFICATION
+      // ============================================================
+      // Admin Panel uses its own dedicated mock OTP system
+      // This is completely independent from Mobile App OTP (otpStore)
+      // 
+      // Admin Panel OTP Variables:
+      // - ADMIN_MOCK_OTP_ENABLED: Enable/disable admin mock OTP
+      // - ADMIN_MOCK_OTP_VALUE: Admin mock OTP value (default: '123456')
+      //
+      // NOTE: Admin Panel does NOT use:
+      // - MOCK_OTP (mobile app only)
+      // - MOCK_OTP_VALUE (mobile app only)
+      // - otpStore (mobile app OTP storage)
+      // ============================================================
       
-      if (MOCK_OTP_ENABLED) {
-        // Mock mode: accept hardcoded OTP
-        if (otp !== MOCK_OTP_VALUE) {
+      const ADMIN_MOCK_OTP_ENABLED = process.env.ADMIN_MOCK_OTP_ENABLED === 'true';
+      const ADMIN_MOCK_OTP_VALUE = process.env.ADMIN_MOCK_OTP_VALUE || '123456';
+      
+      if (ADMIN_MOCK_OTP_ENABLED) {
+        // Admin Panel Mock Mode: Validate against ADMIN_MOCK_OTP_VALUE
+        if (otp !== ADMIN_MOCK_OTP_VALUE) {
           return res.status(401).json({ 
             success: false, 
-            message: `Invalid OTP. Use ${MOCK_OTP_VALUE} for testing.` 
+            message: `Invalid OTP. Use ${ADMIN_MOCK_OTP_VALUE} for admin panel testing.` 
           });
         }
       } else {
-        // Real mode: verify against stored OTP from send-otp
-        const storedOTP = otpStore[normalizedPhone];
-        
-        if (!storedOTP) {
-          return res.status(401).json({ 
-            success: false, 
-            message: "Invalid or expired OTP. Please request a new OTP." 
-          });
-        }
-        
-        // Check if expired
-        if (Date.now() > storedOTP.expiresAt) {
-          delete otpStore[normalizedPhone];
-          return res.status(401).json({ 
-            success: false, 
-            message: "OTP expired. Please request a new OTP." 
-          });
-        }
-        
-        // Check if OTP matches
-        if (storedOTP.otp !== otp) {
-          return res.status(401).json({ 
-            success: false, 
-            message: "Invalid OTP. Please check and try again." 
-          });
-        }
-        
-        // Delete OTP after successful verification
-        delete otpStore[normalizedPhone];
+        // Admin Panel Real Mode: Currently not implemented
+        // In production, you would integrate with a real admin OTP service here
+        return res.status(401).json({ 
+          success: false, 
+          message: "Admin panel OTP verification is disabled. Please enable ADMIN_MOCK_OTP_ENABLED for testing." 
+        });
       }
 
       // Check if user exists in database (support both admin and mobile users)
@@ -224,7 +232,32 @@ export const AuthController = {
     }
   },
 
-  // POST /api/auth/send-otp (kept for mobile app compatibility)
+  /**
+   * POST /api/auth/send-otp
+   * 
+   * MOBILE APP OTP ENDPOINT
+   * ========================
+   * This endpoint is used by the Mobile App (Flutter) for OTP-based authentication.
+   * 
+   * OTP SYSTEM:
+   * - Uses MOCK_OTP and MOCK_OTP_VALUE environment variables
+   * - Mobile App OTP is completely independent from Admin Panel OTP
+   * - Uses otpStore (in-memory storage) for OTP management
+   * - Does NOT use ADMIN_MOCK_OTP_ENABLED or ADMIN_MOCK_OTP_VALUE (those are for admin panel only)
+   * 
+   * Environment Variables:
+   * - MOCK_OTP: Set to 'true' to enable mock OTP for mobile app
+   * - MOCK_OTP_VALUE: The mock OTP value (default: '1234')
+   * 
+   * When MOCK_OTP=true:
+   * - Returns MOCK_OTP_VALUE in response for auto-fill
+   * - Stores MOCK_OTP_VALUE in otpStore for verification
+   * 
+   * When MOCK_OTP=false:
+   * - Generates random 6-digit OTP
+   * - Stores OTP in otpStore for verification
+   * - Attempts to send via Twilio SMS (if configured)
+   */
   async sendOTP(req, res) {
     try {
       const { phone } = req.body;
@@ -240,26 +273,41 @@ export const AuthController = {
         return res.status(400).json({ error: "Only Iraq numbers allowed" });
       }
       
-      // Generate random 6-digit OTP
-      const otp = TwilioService.generateOTP();
-      const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes from now
+      // ============================================================
+      // MOBILE APP OTP GENERATION
+      // ============================================================
+      // Mobile App uses MOCK_OTP and MOCK_OTP_VALUE
+      // This is completely independent from Admin Panel OTP
+      // ============================================================
       
-      // Store OTP in-memory with expiry
+      const MOCK_OTP_ENABLED = process.env.MOCK_OTP === 'true';
+      const MOCK_OTP_VALUE = process.env.MOCK_OTP_VALUE || '1234';
+      
+      let otp;
+      if (MOCK_OTP_ENABLED) {
+        // Mock Mode: Use MOCK_OTP_VALUE
+        otp = MOCK_OTP_VALUE;
+        console.log(`[MOBILE OTP] Mock mode enabled. OTP for ${normalizedPhone}: ${otp}`);
+      } else {
+        // Real Mode: Generate random 6-digit OTP
+        otp = TwilioService.generateOTP();
+        console.log(`[MOBILE OTP] Real OTP generated for ${normalizedPhone}: ${otp} (expires in 5 minutes)`);
+        
+        // Send OTP via Twilio (real SMS)
+        try {
+          await TwilioService.sendOTP(normalizedPhone, otp);
+        } catch (error) {
+          // Log error but don't fail - OTP is logged for testing
+          console.error(`[ERROR] Failed to send OTP via Twilio: ${error.message}`);
+        }
+      }
+      
+      // Store OTP in-memory with expiry (used by verify-otp endpoint)
+      const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes from now
       otpStore[normalizedPhone] = {
         otp: otp,
         expiresAt: expiresAt
       };
-      
-      // Console.log OTP for dev/testing
-      console.log(`[OTP] OTP for ${normalizedPhone}: ${otp} (expires in 5 minutes)`);
-      
-      // Send OTP via Twilio (real SMS)
-      try {
-        await TwilioService.sendOTP(normalizedPhone, otp);
-      } catch (error) {
-        // Log error but don't fail - OTP is logged for testing
-        console.error(`[ERROR] Failed to send OTP via Twilio: ${error.message}`);
-      }
       
       // Return OTP in response for auto-fill (development/testing)
       // In production, remove this and rely on SMS only
@@ -274,7 +322,29 @@ export const AuthController = {
     }
   },
   
-  // POST /api/auth/verify-otp
+  /**
+   * POST /api/auth/verify-otp
+   * 
+   * MOBILE APP OTP VERIFICATION ENDPOINT
+   * ====================================
+   * This endpoint is used by the Mobile App (Flutter) to verify OTP.
+   * 
+   * OTP SYSTEM:
+   * - Uses MOCK_OTP and MOCK_OTP_VALUE environment variables
+   * - Mobile App OTP is completely independent from Admin Panel OTP
+   * - Uses otpStore (in-memory storage) for OTP verification
+   * - Does NOT use ADMIN_MOCK_OTP_ENABLED or ADMIN_MOCK_OTP_VALUE (those are for admin panel only)
+   * 
+   * Environment Variables:
+   * - MOCK_OTP: Set to 'true' to enable mock OTP for mobile app
+   * - MOCK_OTP_VALUE: The mock OTP value (default: '1234')
+   * 
+   * When MOCK_OTP=true:
+   * - Accepts MOCK_OTP_VALUE from otpStore (stored by send-otp)
+   * 
+   * When MOCK_OTP=false:
+   * - Verifies against random OTP stored in otpStore (generated by send-otp)
+   */
   async verifyOTP(req, res) {
     try {
       const { phone, otp } = req.body;
@@ -290,23 +360,33 @@ export const AuthController = {
         return res.status(400).json({ error: "Invalid phone number format" });
       }
       
-      // Check OTP from in-memory store
+      // ============================================================
+      // MOBILE APP OTP VERIFICATION
+      // ============================================================
+      // Mobile App uses otpStore (in-memory storage)
+      // This is completely independent from Admin Panel OTP
+      // ============================================================
+      
+      // Check OTP from in-memory store (populated by send-otp endpoint)
       const storedOTP = otpStore[normalizedPhone];
       
       if (!storedOTP) {
-        return res.status(401).json({ error: "Invalid or expired OTP" });
+        return res.status(401).json({ error: "Invalid or expired OTP. Please request a new OTP." });
       }
       
       // Check if expired
       if (Date.now() > storedOTP.expiresAt) {
         delete otpStore[normalizedPhone];
-        return res.status(401).json({ error: "Invalid or expired OTP" });
+        return res.status(401).json({ error: "OTP expired. Please request a new OTP." });
       }
       
-      // Check if OTP matches
+      // Check if OTP matches (works for both mock and real OTP)
       if (storedOTP.otp !== otp) {
-        return res.status(401).json({ error: "Invalid or expired OTP" });
+        return res.status(401).json({ error: "Invalid OTP. Please check and try again." });
       }
+      
+      // Delete OTP after successful verification
+      delete otpStore[normalizedPhone];
       
       // Fetch user from database to get role
       const userResult = await pool.query(
