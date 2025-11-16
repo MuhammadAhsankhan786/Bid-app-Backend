@@ -95,12 +95,48 @@ export const AuthController = {
         });
       }
 
-      // Verify mock OTP (1234)
-      if (otp !== '1234') {
-        return res.status(401).json({ 
-          success: false, 
-          message: "Invalid OTP. Use 1234 for testing." 
-        });
+      // Verify OTP (mock mode or real)
+      const MOCK_OTP_ENABLED = process.env.MOCK_OTP === 'true';
+      const MOCK_OTP_VALUE = process.env.MOCK_OTP_VALUE || '1234';
+      
+      if (MOCK_OTP_ENABLED) {
+        // Mock mode: accept hardcoded OTP
+        if (otp !== MOCK_OTP_VALUE) {
+          return res.status(401).json({ 
+            success: false, 
+            message: `Invalid OTP. Use ${MOCK_OTP_VALUE} for testing.` 
+          });
+        }
+      } else {
+        // Real mode: verify against stored OTP from send-otp
+        const storedOTP = otpStore[normalizedPhone];
+        
+        if (!storedOTP) {
+          return res.status(401).json({ 
+            success: false, 
+            message: "Invalid or expired OTP. Please request a new OTP." 
+          });
+        }
+        
+        // Check if expired
+        if (Date.now() > storedOTP.expiresAt) {
+          delete otpStore[normalizedPhone];
+          return res.status(401).json({ 
+            success: false, 
+            message: "OTP expired. Please request a new OTP." 
+          });
+        }
+        
+        // Check if OTP matches
+        if (storedOTP.otp !== otp) {
+          return res.status(401).json({ 
+            success: false, 
+            message: "Invalid OTP. Please check and try again." 
+          });
+        }
+        
+        // Delete OTP after successful verification
+        delete otpStore[normalizedPhone];
       }
 
       // Check if user exists in database (support both admin and mobile users)
