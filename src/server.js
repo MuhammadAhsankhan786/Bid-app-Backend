@@ -9,6 +9,7 @@ import bidRoutes from "./Routes/bidRoutes.js";
 import auctionRoutes from "./Routes/auctionRoutes.js";
 import orderRoutes from "./Routes/orderRoutes.js";
 import notificationRoutes from "./Routes/notificationRoutes.js";
+import uploadRoutes from "./Routes/uploadRoutes.js";
 import cors from "cors";
 import pool from "./config/db.js";
 
@@ -110,6 +111,7 @@ app.use("/api/bids", bidRoutes);
 app.use("/api/auction", auctionRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/uploads", uploadRoutes);
 
 // Health check routes
 app.get("/", (req, res) => res.send("BidMaster Admin API running ✅"));

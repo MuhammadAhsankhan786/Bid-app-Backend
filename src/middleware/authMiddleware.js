@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import pool from "../config/db.js";
+import { verifyAccessToken } from "../utils/tokenUtils.js";
 
 export const verifyAdmin = async (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
@@ -10,6 +11,16 @@ export const verifyAdmin = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    // Verify scope is "admin" for admin routes (backward compatible: allow tokens without scope)
+    const tokenScope = decoded.scope;
+    if (tokenScope && tokenScope !== 'admin') {
+      console.log('⚠️ [verifyAdmin] Invalid scope for admin route:', tokenScope);
+      return res.status(403).json({ 
+        message: "This token is not valid for admin panel. Please use admin panel login." 
+      });
+    }
+    // If scope is undefined/null, allow for backward compatibility (old tokens)
     
     // Check if user exists and is admin (for phone-based auth, we need to verify user exists)
     if (decoded.phone) {
@@ -105,7 +116,51 @@ export const verifyUser = async (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // 🔍 DEEP TRACE: Log incoming token
+    console.log('🔍 [DEEP TRACE] verifyUser middleware - INCOMING TOKEN');
+    console.log('   Token preview:', token.substring(0, 50) + '...');
+    
+    // Use token utility to verify access token
+    const decoded = verifyAccessToken(token);
+    
+    // 🔍 DEEP TRACE: Log decoded token
+    if (decoded) {
+      console.log('   🔍 Decoded Token Payload:');
+      console.log('      ID:', decoded.id);
+      console.log('      Phone:', decoded.phone);
+      console.log('      Role (from token):', decoded.role);
+      console.log('      Scope (from token):', decoded.scope);
+      console.log('      Expired:', decoded.expired);
+    }
+    
+    // Check if token is expired
+    if (decoded && decoded.expired) {
+      return res.status(401).json({ 
+        success: false, 
+        error: "token_expired",
+        message: "Token expired" 
+      });
+    }
+    
+    if (!decoded) {
+      return res.status(401).json({ 
+        success: false, 
+        error: "invalid_token",
+        message: "Invalid token" 
+      });
+    }
+
+    // Verify scope is "mobile" for mobile routes (backward compatible: allow tokens without scope)
+    const tokenScope = decoded.scope;
+    if (tokenScope && tokenScope !== 'mobile') {
+      console.log('⚠️ [verifyUser] Invalid scope for mobile route:', tokenScope);
+      return res.status(403).json({ 
+        success: false, 
+        error: "invalid_scope",
+        message: "This token is not valid for mobile app. Please use mobile app login." 
+      });
+    }
+    // If scope is undefined/null, allow for backward compatibility (old tokens)
     
     // Verify user exists in database
     let user;
@@ -116,7 +171,11 @@ export const verifyUser = async (req, res, next) => {
         [decoded.phone]
       );
       if (userResult.rows.length === 0) {
-        return res.status(401).json({ success: false, message: "User not found" });
+        return res.status(401).json({ 
+          success: false, 
+          error: "user_not_found",
+          message: "User not found" 
+        });
       }
       user = userResult.rows[0];
     } else if (decoded.id) {
@@ -126,16 +185,38 @@ export const verifyUser = async (req, res, next) => {
         [decoded.id]
       );
       if (userResult.rows.length === 0) {
-        return res.status(401).json({ success: false, message: "User not found" });
+        return res.status(401).json({ 
+          success: false, 
+          error: "user_not_found",
+          message: "User not found" 
+        });
       }
       user = userResult.rows[0];
     } else {
-      return res.status(401).json({ success: false, message: "Invalid token format" });
+      return res.status(401).json({ 
+        success: false, 
+        error: "invalid_token_format",
+        message: "Invalid token format" 
+      });
+    }
+
+    // 🔍 DEEP TRACE: Compare token role vs database role
+    console.log('   🔍 Database User:');
+    console.log('      ID:', user.id);
+    console.log('      Phone:', user.phone);
+    console.log('      Role (from database):', user.role);
+    if (decoded.role && user.role && decoded.role.toLowerCase() !== user.role.toLowerCase()) {
+      console.log('   ⚠️⚠️⚠️ ROLE MISMATCH: Token role (' + decoded.role + ') != Database role (' + user.role + ')');
+      console.log('   ⚠️ Using database role:', user.role);
     }
 
     // Check if user is blocked
     if (user.status === 'blocked') {
-      return res.status(403).json({ success: false, message: "Account is blocked" });
+      return res.status(403).json({ 
+        success: false, 
+        error: "account_blocked",
+        message: "Account is blocked" 
+      });
     }
 
     req.user = user;
@@ -147,8 +228,16 @@ export const verifyUser = async (req, res, next) => {
     }
     // Return appropriate error message
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ success: false, message: "Token expired" });
+      return res.status(401).json({ 
+        success: false, 
+        error: "token_expired",
+        message: "Token expired" 
+      });
     }
-    res.status(401).json({ success: false, message: "Invalid or expired token" });
+    res.status(401).json({ 
+      success: false, 
+      error: "invalid_token",
+      message: "Invalid or expired token" 
+    });
   }
 };

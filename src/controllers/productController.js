@@ -375,6 +375,174 @@ export const ProductController = {
       console.error("Error fetching product documents:", error);
       res.status(500).json({ error: "Failed to fetch product documents" });
     }
+  },
+
+  // PUT /admin/products/:id - Update product (Super Admin only)
+  async updateProduct(req, res) {
+    try {
+      const { id } = req.params;
+      const { title, description, image_url, startingPrice, category_id } = req.body;
+      const userRole = (req.user.role || '').toLowerCase().trim();
+
+      // Permission check: Only Super Admin can edit products from admin panel
+      if (userRole !== 'superadmin') {
+        return res.status(403).json({
+          success: false,
+          error: "Only Super Admin can edit products"
+        });
+      }
+
+      // Check if product exists
+      const productCheck = await pool.query(
+        "SELECT id FROM products WHERE id = $1",
+        [id]
+      );
+
+      if (productCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found"
+        });
+      }
+
+      // Build update query
+      const updates = [];
+      const params = [];
+      let paramCount = 1;
+
+      if (title) {
+        updates.push(`title = $${paramCount++}`);
+        params.push(title);
+      }
+      if (description !== undefined) {
+        updates.push(`description = $${paramCount++}`);
+        params.push(description);
+      }
+      if (image_url !== undefined) {
+        const imageUrlValue = Array.isArray(image_url) ? JSON.stringify(image_url) : (image_url || null);
+        updates.push(`image_url = $${paramCount++}`);
+        params.push(imageUrlValue);
+      }
+      if (startingPrice !== undefined) {
+        updates.push(`starting_price = $${paramCount++}`);
+        updates.push(`starting_bid = $${paramCount}`);
+        params.push(startingPrice);
+        paramCount++;
+      }
+      if (category_id !== undefined) {
+        updates.push(`category_id = $${paramCount++}`);
+        params.push(category_id);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "No fields to update"
+        });
+      }
+
+      params.push(id);
+      const result = await pool.query(
+        `UPDATE products 
+         SET ${updates.join(', ')}
+         WHERE id = $${paramCount}
+         RETURNING *`,
+        params
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found"
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Product updated successfully",
+        product: result.rows[0]
+      });
+    } catch (error) {
+      console.error("Error updating product:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to update product"
+      });
+    }
+  },
+
+  // DELETE /admin/products/:id - Delete product (Super Admin only)
+  async deleteProduct(req, res) {
+    try {
+      const { id } = req.params;
+      const userRole = (req.user.role || '').toLowerCase().trim();
+
+      // Permission check: Only Super Admin can delete products from admin panel
+      if (userRole !== 'superadmin') {
+        return res.status(403).json({
+          success: false,
+          error: "Only Super Admin can delete products"
+        });
+      }
+
+      // Check if product exists
+      const productCheck = await pool.query(
+        "SELECT id, title FROM products WHERE id = $1",
+        [id]
+      );
+
+      if (productCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found"
+        });
+      }
+
+      // Delete product
+      const result = await pool.query(
+        "DELETE FROM products WHERE id = $1 RETURNING id, title",
+        [id]
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found"
+        });
+      }
+
+      // Log admin action
+      try {
+        const tableCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'admin_activity_log'
+          )
+        `);
+
+        if (tableCheck.rows[0].exists) {
+          await pool.query(
+            `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
+             VALUES ($1, 'Product deleted', 'product', $2)`,
+            [req.user.id, id]
+          );
+        }
+      } catch (logError) {
+        console.log('Warning: Could not log admin action:', logError.message);
+      }
+
+      res.json({
+        success: true,
+        message: "Product deleted successfully",
+        product: { id: result.rows[0].id, title: result.rows[0].title }
+      });
+    } catch (error) {
+      console.error("Error deleting product:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to delete product"
+      });
+    }
   }
 };
 

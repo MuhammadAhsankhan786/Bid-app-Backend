@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { TwilioService } from "../services/twilioService.js";
 import pool from "../config/db.js";
 import bcrypt from "bcrypt";
+import { generateAccessToken, generateRefreshToken } from "../utils/tokenUtils.js";
 
 // In-memory OTP store with 5-minute expiry
 const otpStore = {};
@@ -140,22 +141,33 @@ export const AuthController = {
         userRole = 'superadmin';
       }
 
-      // Generate JWT token with user ID and role
-      const token = jwt.sign(
-        { 
-          id: user.id, 
-          phone: user.phone, 
-          role: userRole 
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || "24h" }
+      // Determine scope based on user role: admin roles get "admin" scope, others get "mobile"
+      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer'];
+      const scope = adminRoles.includes(userRole) ? 'admin' : 'mobile';
+
+      // Generate access and refresh tokens with appropriate scope
+      const tokenPayload = { 
+        id: user.id, 
+        phone: user.phone, 
+        role: userRole,
+        scope: scope
+      };
+      const accessToken = generateAccessToken(tokenPayload);
+      const refreshToken = generateRefreshToken(tokenPayload);
+
+      // Save refresh token to database
+      await pool.query(
+        "UPDATE users SET refresh_token = $1 WHERE id = $2",
+        [refreshToken, user.id]
       );
 
       // Return user data with default values for null fields (dev mode support)
       res.json({
         success: true,
         message: "Login successful",
-        token,
+        accessToken,
+        refreshToken,
+        token: accessToken, // Keep for backward compatibility
         role: userRole,
         user: {
           id: user.id,
@@ -260,11 +272,54 @@ export const AuthController = {
         return res.status(401).json({ error: "Invalid or expired OTP" });
       }
       
-      // OTP is valid - generate JWT token
-      const token = jwt.sign(
-        { phone: normalizedPhone },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || "24h" }
+      // Fetch user from database to get role
+      const userResult = await pool.query(
+        "SELECT id, name, email, phone, role, status FROM users WHERE phone = $1",
+        [normalizedPhone]
+      );
+      
+      if (userResult.rows.length === 0) {
+        // User doesn't exist - this shouldn't happen if OTP was sent
+        return res.status(404).json({ 
+          success: false,
+          error: "User not found. Please register first." 
+        });
+      }
+      
+      const user = userResult.rows[0];
+      
+      // Check if user is blocked
+      if (user.status === 'blocked') {
+        return res.status(403).json({ 
+          success: false,
+          error: "Account is blocked" 
+        });
+      }
+      
+      // Normalize role (map legacy 'admin' to 'superadmin')
+      let userRole = user.role?.toLowerCase();
+      if (userRole === 'admin') {
+        userRole = 'superadmin';
+      }
+      
+      // Determine scope based on user role: admin roles get "admin" scope, others get "mobile"
+      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer'];
+      const scope = adminRoles.includes(userRole) ? 'admin' : 'mobile';
+      
+      // Generate access and refresh tokens with appropriate scope
+      const tokenPayload = { 
+        id: user.id,
+        phone: normalizedPhone, 
+        role: userRole,
+        scope: scope
+      };
+      const accessToken = generateAccessToken(tokenPayload);
+      const refreshToken = generateRefreshToken(tokenPayload);
+
+      // Save refresh token to database
+      await pool.query(
+        "UPDATE users SET refresh_token = $1 WHERE id = $2",
+        [refreshToken, user.id]
       );
       
       // Delete OTP from store after successful verification
@@ -272,8 +327,18 @@ export const AuthController = {
       
       res.json({
         success: true,
-        token,
-        user: { phone: normalizedPhone }
+        accessToken,
+        refreshToken,
+        token: accessToken, // Keep for backward compatibility
+        role: userRole,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: userRole,
+          status: user.status
+        }
       });
     } catch (error) {
       console.error("Error verifying OTP:", error);
@@ -336,17 +401,27 @@ export const AuthController = {
 
       const user = result.rows[0];
 
-      // Generate JWT token
-      const token = jwt.sign(
-        { id: user.id, phone: user.phone, role: user.role },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || "30d" }
+      // Generate access and refresh tokens
+      const tokenPayload = { 
+        id: user.id, 
+        phone: user.phone, 
+        role: user.role 
+      };
+      const accessToken = generateAccessToken(tokenPayload);
+      const refreshToken = generateRefreshToken(tokenPayload);
+
+      // Save refresh token to database
+      await pool.query(
+        "UPDATE users SET refresh_token = $1 WHERE id = $2",
+        [refreshToken, user.id]
       );
 
       res.status(201).json({
         success: true,
         message: "User registered successfully",
-        token,
+        accessToken,
+        refreshToken,
+        token: accessToken, // Keep for backward compatibility
         user: {
           id: user.id,
           name: user.name,
@@ -424,17 +499,27 @@ export const AuthController = {
         });
       }
 
-      // Generate JWT token
-      const token = jwt.sign(
-        { id: user.id, phone: user.phone, role: user.role },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || "30d" }
+      // Generate access and refresh tokens
+      const tokenPayload = { 
+        id: user.id, 
+        phone: user.phone, 
+        role: user.role 
+      };
+      const accessToken = generateAccessToken(tokenPayload);
+      const refreshToken = generateRefreshToken(tokenPayload);
+
+      // Save refresh token to database
+      await pool.query(
+        "UPDATE users SET refresh_token = $1 WHERE id = $2",
+        [refreshToken, user.id]
       );
 
       res.json({
         success: true,
         message: "Login successful",
-        token,
+        accessToken,
+        refreshToken,
+        token: accessToken, // Keep for backward compatibility
         user: {
           id: user.id,
           name: user.name,
@@ -488,12 +573,12 @@ export const AuthController = {
   async updateProfile(req, res) {
     try {
       const userId = req.user.id;
-      const { name, phone } = req.body;
+      const { name, phone, role } = req.body;
 
-      if (!name && !phone) {
+      if (!name && !phone && !role) {
         return res.status(400).json({ 
           success: false, 
-          message: "At least one field (name or phone) is required" 
+          message: "At least one field (name, phone, or role) is required" 
         });
       }
 
@@ -532,6 +617,31 @@ export const AuthController = {
         params.push(normalizedPhone);
       }
 
+      // 🔧 FIX: Allow users to update their role (buyer/seller only, not admin roles)
+      if (role) {
+        const normalizedRole = role.toLowerCase().trim();
+        // Only allow buyer/seller roles to be set by users themselves
+        // Admin roles (superadmin, admin, moderator, viewer) cannot be self-assigned
+        if (normalizedRole !== 'buyer' && normalizedRole !== 'seller') {
+          return res.status(400).json({ 
+            success: false, 
+            message: "Role must be 'buyer' or 'seller'" 
+          });
+        }
+        
+        // Get current role before update
+        const currentUser = await pool.query('SELECT role FROM users WHERE id = $1', [userId]);
+        const currentRole = currentUser.rows[0]?.role;
+        
+        console.log('🔧 [DEEP TRACE] User updating role:');
+        console.log('   User ID:', userId);
+        console.log('   Current role:', currentRole);
+        console.log('   New role:', normalizedRole);
+        
+        updates.push(`role = $${paramCount++}`);
+        params.push(normalizedRole);
+      }
+
       params.push(userId);
       const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramCount} 
                      RETURNING id, name, email, phone, role, status, created_at`;
@@ -545,11 +655,68 @@ export const AuthController = {
         });
       }
 
-      res.json({
+      const updatedUser = result.rows[0];
+      
+      // CRITICAL: Log the updated role to verify database update
+      if (role) {
+        console.log('✅ [DEEP TRACE] Profile update completed:');
+        console.log('   User ID:', updatedUser.id);
+        console.log('   Updated role in database:', updatedUser.role);
+        console.log('   Expected role:', role.toLowerCase().trim());
+        
+        if (updatedUser.role?.toLowerCase() !== role.toLowerCase().trim()) {
+          console.log('⚠️⚠️⚠️ WARNING: Database role does not match expected role!');
+          console.log('   Database has:', updatedUser.role);
+          console.log('   Expected:', role.toLowerCase().trim());
+        } else {
+          console.log('✅ Database role matches expected role');
+        }
+      }
+
+      // 🔧 FIX: Generate new tokens when role is updated
+      let responseData = {
         success: true,
         message: "Profile updated successfully",
-        data: result.rows[0]
-      });
+        data: updatedUser
+      };
+
+      if (role) {
+        // Get scope from current token (preserve scope)
+        const scope = req.user.scope || 'mobile'; // Default to mobile for backward compatibility
+        
+        // Normalize role for token
+        let tokenRole = updatedUser.role?.toLowerCase();
+        if (tokenRole === 'admin') {
+          tokenRole = 'superadmin';
+        }
+
+        // Generate new tokens with updated role
+        const tokenPayload = {
+          id: updatedUser.id,
+          phone: updatedUser.phone,
+          role: tokenRole,
+          scope: scope // Preserve scope from original token
+        };
+        
+        const newAccessToken = generateAccessToken(tokenPayload);
+        const newRefreshToken = generateRefreshToken(tokenPayload);
+
+        // Update refresh token in database
+        await pool.query(
+          "UPDATE users SET refresh_token = $1 WHERE id = $2",
+          [newRefreshToken, updatedUser.id]
+        );
+
+        console.log('✅ New tokens generated with updated role:', tokenRole);
+        console.log('   Token scope preserved:', scope);
+
+        // Include new tokens in response
+        responseData.accessToken = newAccessToken;
+        responseData.refreshToken = newRefreshToken;
+        responseData.role = tokenRole;
+      }
+
+      res.json(responseData);
     } catch (error) {
       console.error("Error updating profile:", error);
       res.status(500).json({ 
@@ -559,11 +726,117 @@ export const AuthController = {
     }
   },
 
+  // POST /api/auth/refresh
+  async refreshToken(req, res) {
+    try {
+      const { refreshToken } = req.body;
+
+      if (!refreshToken) {
+        return res.status(400).json({
+          success: false,
+          error: "refresh_token_required",
+          message: "Refresh token is required"
+        });
+      }
+
+      // Verify refresh token
+      const { verifyRefreshToken } = await import("../utils/tokenUtils.js");
+      const decoded = verifyRefreshToken(refreshToken);
+
+      if (!decoded || !decoded.id) {
+        return res.status(401).json({
+          success: false,
+          error: "invalid_refresh_token",
+          message: "Invalid or expired refresh token"
+        });
+      }
+
+      // Check if refresh token exists in database
+      const userResult = await pool.query(
+        "SELECT id, name, email, phone, role, status, refresh_token FROM users WHERE id = $1",
+        [decoded.id]
+      );
+
+      if (userResult.rows.length === 0) {
+        return res.status(401).json({
+          success: false,
+          error: "user_not_found",
+          message: "User not found"
+        });
+      }
+
+      const user = userResult.rows[0];
+
+      // Verify refresh token matches stored token
+      if (user.refresh_token !== refreshToken) {
+        return res.status(401).json({
+          success: false,
+          error: "invalid_refresh_token",
+          message: "Refresh token mismatch"
+        });
+      }
+
+      // Check if user is blocked
+      if (user.status === 'blocked') {
+        return res.status(403).json({
+          success: false,
+          error: "account_blocked",
+          message: "Account is blocked"
+        });
+      }
+
+      // Normalize role
+      let userRole = user.role?.toLowerCase();
+      if (userRole === 'admin') {
+        userRole = 'superadmin';
+      }
+
+      // Preserve scope from the old refresh token
+      const scope = decoded.scope || 'mobile'; // Default to mobile for backward compatibility
+
+      // Generate new tokens (token rotation) with preserved scope
+      const tokenPayload = {
+        id: user.id,
+        phone: user.phone,
+        role: userRole,
+        scope: scope // Preserve scope from original token
+      };
+      const newAccessToken = generateAccessToken(tokenPayload);
+      const newRefreshToken = generateRefreshToken(tokenPayload);
+
+      // Update refresh token in database (rotation)
+      await pool.query(
+        "UPDATE users SET refresh_token = $1 WHERE id = $2",
+        [newRefreshToken, user.id]
+      );
+
+      res.json({
+        success: true,
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        role: userRole
+      });
+    } catch (error) {
+      console.error("Error refreshing token:", error);
+      res.status(500).json({
+        success: false,
+        error: "internal_error",
+        message: "Internal server error"
+      });
+    }
+  },
+
   // POST /api/auth/logout
   async logout(req, res) {
     try {
-      // Since we're using JWT tokens (stateless), logout is handled client-side
-      // This endpoint exists for consistency and future token blacklisting if needed
+      // Clear refresh token from database if user is authenticated
+      if (req.user && req.user.id) {
+        await pool.query(
+          "UPDATE users SET refresh_token = NULL WHERE id = $1",
+          [req.user.id]
+        );
+      }
+
       res.json({
         success: true,
         message: "Logged out successfully"

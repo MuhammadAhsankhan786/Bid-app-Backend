@@ -18,7 +18,14 @@
     "verify-integration": "node src/scripts/verifyIntegration.js",
     "fix-db-schema": "node src/scripts/fixDatabaseSchema.js",
     "health-check": "node src/scripts/systemHealthMonitor.js",
-    "verify-db": "node src/scripts/verifyDatabaseSchema.js"
+    "verify-db": "node src/scripts/verifyDatabaseSchema.js",
+    "test:e2e": "node src/scripts/e2e_product_lifecycle_test.js",
+    "audit:auth": "node src/scripts/auth_role_audit.js",
+    "verify:role": "node src/scripts/verify_user_role.js",
+    "test:jwt-refresh": "node src/scripts/jwt_refresh_test.js",
+    "migrate:refresh-token": "node src/scripts/add_refresh_token_column.js",
+    "monitor:jwt": "node src/scripts/jwt_refresh_monitor.js",
+    "monitor:jwt-once": "node -e \"import('./src/scripts/jwt_refresh_monitor.js').then(m => m.runOnce().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); }))\""
   },
   "keywords": [],
   "author": "",
@@ -33,7 +40,8 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
     "pg": "^8.16.3",
-    "twilio": "^5.10.4"
+    "twilio": "^5.10.4",
+    "form-data": "^4.0.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

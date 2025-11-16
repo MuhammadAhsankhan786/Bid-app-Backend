@@ -8,6 +8,30 @@ export const MobileProductController = {
       const { title, description, image_url, startingPrice, duration, category_id } = req.body;
       const sellerId = req.user.id;
 
+      // 🔍 DEEP TRACE: Log incoming token details
+      console.log('🔍 [DEEP TRACE] Backend createProduct - INCOMING REQUEST');
+      console.log('   Request headers:', {
+        authorization: req.headers.authorization ? req.headers.authorization.substring(0, 50) + '...' : 'MISSING',
+        'content-type': req.headers['content-type'],
+      });
+      console.log('   🔍 Decoded User from Token:');
+      console.log('      User ID:', req.user.id);
+      console.log('      User Role:', req.user.role);
+      console.log('      User Phone:', req.user.phone);
+      console.log('   🔍 Request Body:', {
+        title: title,
+        startingPrice: startingPrice,
+        hasImage: !!image_url
+      });
+
+      // Debug logging
+      console.log('🔍 [CreateProduct] Request received:', {
+        userId: sellerId,
+        userRole: req.user.role,
+        title: title,
+        hasImage: !!image_url
+      });
+
       if (!title || !startingPrice) {
         return res.status(400).json({
           success: false,
@@ -15,13 +39,21 @@ export const MobileProductController = {
         });
       }
 
-      // Validate seller role
-      if (req.user.role !== 'seller') {
+      // Validate seller role - case-insensitive check
+      const userRole = (req.user.role || '').toLowerCase().trim();
+      if (userRole !== 'seller') {
+        console.error('❌ [CreateProduct] Role validation failed:', {
+          expected: 'seller',
+          received: req.user.role,
+          normalized: userRole
+        });
         return res.status(403).json({
           success: false,
-          message: "Only sellers can create products"
+          message: `Only sellers can create products. Your current role: ${req.user.role || 'unknown'}`
         });
       }
+
+      console.log('✅ [CreateProduct] Role validation passed');
 
       // Calculate auction end time (duration in days, default 7 days)
       const days = duration || 7;
@@ -390,6 +422,179 @@ export const MobileProductController = {
       });
     } catch (error) {
       console.error("Error fetching product:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
+  },
+
+  // PUT /api/products/:id - Update product (Seller can edit ONLY their own products)
+  async updateProduct(req, res) {
+    try {
+      const { id } = req.params;
+      const { title, description, image_url, startingPrice, category_id } = req.body;
+      const userId = req.user.id;
+      const userRole = (req.user.role || '').toLowerCase().trim();
+
+      // Check if product exists
+      const productCheck = await pool.query(
+        "SELECT id, seller_id, status FROM products WHERE id = $1",
+        [id]
+      );
+
+      if (productCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found"
+        });
+      }
+
+      const product = productCheck.rows[0];
+
+      // Permission check: Seller can edit ONLY their own products
+      if (userRole === 'seller') {
+        if (product.seller_id !== userId) {
+          return res.status(403).json({
+            success: false,
+            message: "You can only edit your own products"
+          });
+        }
+      } else if (userRole !== 'superadmin') {
+        // Only seller and superadmin can edit
+        return res.status(403).json({
+          success: false,
+          message: "Only sellers can edit their own products, or super admin can edit any product"
+        });
+      }
+
+      // Build update query
+      const updates = [];
+      const params = [];
+      let paramCount = 1;
+
+      if (title) {
+        updates.push(`title = $${paramCount++}`);
+        params.push(title);
+      }
+      if (description !== undefined) {
+        updates.push(`description = $${paramCount++}`);
+        params.push(description);
+      }
+      if (image_url !== undefined) {
+        const imageUrlValue = Array.isArray(image_url) ? JSON.stringify(image_url) : (image_url || null);
+        updates.push(`image_url = $${paramCount++}`);
+        params.push(imageUrlValue);
+      }
+      if (startingPrice !== undefined) {
+        updates.push(`starting_price = $${paramCount++}`);
+        updates.push(`starting_bid = $${paramCount}`);
+        params.push(startingPrice);
+        paramCount++;
+      }
+      if (category_id !== undefined) {
+        updates.push(`category_id = $${paramCount++}`);
+        params.push(category_id);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No fields to update"
+        });
+      }
+
+      params.push(id);
+      const result = await pool.query(
+        `UPDATE products 
+         SET ${updates.join(', ')}
+         WHERE id = $${paramCount}
+         RETURNING *`,
+        params
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found"
+        });
+      }
+
+      // Fix image URLs in response
+      const fixedProduct = fixImageUrlInItem(result.rows[0]);
+
+      res.json({
+        success: true,
+        message: "Product updated successfully",
+        data: fixedProduct
+      });
+    } catch (error) {
+      console.error("Error updating product:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
+  },
+
+  // DELETE /api/products/:id - Delete product (Seller can delete ONLY their own products)
+  async deleteProduct(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const userRole = (req.user.role || '').toLowerCase().trim();
+
+      // Check if product exists
+      const productCheck = await pool.query(
+        "SELECT id, seller_id, title FROM products WHERE id = $1",
+        [id]
+      );
+
+      if (productCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found"
+        });
+      }
+
+      const product = productCheck.rows[0];
+
+      // Permission check: Seller can delete ONLY their own products
+      if (userRole === 'seller') {
+        if (product.seller_id !== userId) {
+          return res.status(403).json({
+            success: false,
+            message: "You can only delete your own products"
+          });
+        }
+      } else if (userRole !== 'superadmin') {
+        // Only seller and superadmin can delete
+        return res.status(403).json({
+          success: false,
+          message: "Only sellers can delete their own products, or super admin can delete any product"
+        });
+      }
+
+      // Delete product
+      const result = await pool.query(
+        "DELETE FROM products WHERE id = $1 RETURNING id, title",
+        [id]
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found"
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Product deleted successfully",
+        data: { id: result.rows[0].id, title: result.rows[0].title }
+      });
+    } catch (error) {
+      console.error("Error deleting product:", error);
       res.status(500).json({
         success: false,
         message: "Internal server error"

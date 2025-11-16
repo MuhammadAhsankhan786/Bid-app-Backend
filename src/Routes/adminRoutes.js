@@ -54,6 +54,10 @@ router.get("/products/:id", authorizeRoles("superadmin", "moderator", "viewer"),
 router.patch("/products/approve/:id", authorizeRoles("superadmin"), ProductController.approveProduct);
 // PATCH /products/reject/:id - superadmin only
 router.patch("/products/reject/:id", authorizeRoles("superadmin"), ProductController.rejectProduct);
+// PUT /products/:id - superadmin only (edit product)
+router.put("/products/:id", authorizeRoles("superadmin"), ProductController.updateProduct);
+// DELETE /products/:id - superadmin only (delete product)
+router.delete("/products/:id", authorizeRoles("superadmin"), ProductController.deleteProduct);
 
 // --- ORDERS ---
 // GET /orders - superadmin, moderator

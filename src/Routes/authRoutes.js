@@ -21,6 +21,10 @@ router.post("/login", AuthController.login);
 // POST /api/auth/login-phone - Admin Panel Phone-based Login (Mock OTP)
 router.post("/login-phone", AuthController.loginPhone);
 
+// ==================== TOKEN REFRESH ====================
+// POST /api/auth/refresh - Refresh access token
+router.post("/refresh", AuthController.refreshToken);
+
 // ==================== PROFILE ROUTES (PROTECTED) ====================
 // GET /api/auth/profile - Get user profile
 router.get("/profile", verifyUser, AuthController.getProfile);

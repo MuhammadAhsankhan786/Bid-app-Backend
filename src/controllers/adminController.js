@@ -24,8 +24,9 @@ export const AdminController = {
     // Normalize role (map legacy 'admin' to 'superadmin')
     const normalizedRole = userRole === 'admin' ? 'superadmin' : userRole;
 
+    // Generate token with scope="admin" for admin panel
     const token = jwt.sign(
-      { id: user.id, role: normalizedRole },
+      { id: user.id, role: normalizedRole, scope: 'admin' },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
