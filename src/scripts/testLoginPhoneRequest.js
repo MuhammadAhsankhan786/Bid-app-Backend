@@ -12,7 +12,7 @@ async function testLoginPhoneRequest() {
   const testCases = [
     {
       name: 'Correct Format',
-      body: { phone: '+9647701234567', otp: '1234' },
+      body: { phone: '+9647701234567', otp: 'CHECK_SMS_FOR_OTP' },
       expected: '200 OK'
     },
     {
@@ -110,6 +110,12 @@ await _dio.post(
 }
 
 testLoginPhoneRequest();
+
+
+
+
+
+
 
 
 

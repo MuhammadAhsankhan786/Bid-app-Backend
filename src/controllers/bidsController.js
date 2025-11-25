@@ -248,11 +248,14 @@ export const BidsController = {
         console.log('🧩 [BidPlace] Sending response:', responseData);
 
         try {
-          res.status(201).json({
+          const jsonResponse = {
             success: true,
             message: "Bid placed successfully",
             data: responseData
-          });
+          };
+          
+          console.log('🧩 [BidPlace] Sending success response:', jsonResponse);
+          res.status(201).json(jsonResponse);
         } catch (responseError) {
           console.log('🧩 [BidError] Reason: Error sending response', {
             error: responseError.message,

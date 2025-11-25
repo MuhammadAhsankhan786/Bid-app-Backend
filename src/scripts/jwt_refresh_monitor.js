@@ -90,7 +90,9 @@ async function performHealthCheck() {
     await axios.post(`${BASE_URL}/auth/send-otp`, {
       phone: seller.phone
     });
-    const otp = '1234'; // Test OTP
+    // OTP is sent via Twilio Verify API
+    // For testing, check SMS for OTP code
+    const otp = process.env.TEST_OTP || 'CHECK_SMS_FOR_OTP';
 
     // Login
     const loginResponse = await axios.post(`${BASE_URL}/auth/login-phone`, {

@@ -78,12 +78,14 @@ async function runJWTRefreshTest() {
     const seller = await getUserByRole('seller');
     log(`   Seller: ${seller.name} (ID: ${seller.id}, Phone: ${seller.phone})`, 'blue');
 
-    // Send OTP (for testing, use '1234' as OTP)
+    // Send OTP via Twilio Verify API
     await axios.post(`${BASE_URL}/auth/send-otp`, {
       phone: seller.phone
     });
-    const otp = '1234'; // Use test OTP
-    log(`   Using test OTP: ${otp}`, 'blue');
+    // Note: OTP is sent via SMS, not hardcoded
+    // For testing, check SMS for OTP code
+    const otp = process.env.TEST_OTP || 'CHECK_SMS_FOR_OTP'; // Get OTP from SMS
+    log(`   ⚠️  Note: OTP sent via Twilio. Check SMS for OTP code.`, 'yellow');
 
     // Login
     const loginResponse = await axios.post(`${BASE_URL}/auth/login-phone`, {

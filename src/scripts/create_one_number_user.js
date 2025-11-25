@@ -12,13 +12,14 @@ import pool from '../config/db.js';
 import bcrypt from 'bcrypt';
 
 const ONE_NUMBER_LOGIN_PHONE = '+9647701234567';
-const ONE_NUMBER_LOGIN_OTP = '1234';
+// Note: OTP is sent via Twilio Verify API, not hardcoded
 
 async function createOneNumberUser() {
   try {
     console.log('\n🎯 Creating ONE NUMBER LOGIN USER');
     console.log(`📱 Phone: ${ONE_NUMBER_LOGIN_PHONE}`);
-    console.log(`🔑 OTP: ${ONE_NUMBER_LOGIN_OTP} (mock - always works)\n`);
+    console.log(`📱 Phone: ${ONE_NUMBER_LOGIN_PHONE}\n`);
+    console.log(`💡 OTP will be sent via Twilio Verify API\n`);
 
     // Check if user already exists
     const existingUser = await pool.query(
@@ -35,7 +36,7 @@ async function createOneNumberUser() {
       console.log(`   Phone: ${user.phone}`);
       console.log(`   Role: ${user.role}`);
       console.log(`   Status: ${user.status}`);
-      console.log('\n💡 User can login with this phone number and OTP: 1234');
+      console.log('\n💡 User can login with this phone number. OTP will be sent via Twilio.');
       console.log('💡 After login, user can select buyer or seller role');
       return;
     }
@@ -66,7 +67,7 @@ async function createOneNumberUser() {
     console.log(`   Status: ${user.status}`);
     console.log('\n🎯 LOGIN INSTRUCTIONS:');
     console.log(`   1. Use phone: ${ONE_NUMBER_LOGIN_PHONE}`);
-    console.log(`   2. Use OTP: ${ONE_NUMBER_LOGIN_OTP}`);
+    console.log(`   2. OTP will be sent via Twilio Verify API`);
     console.log(`   3. After login, select buyer or seller role`);
     console.log(`   4. User can switch roles anytime\n`);
 
@@ -90,6 +91,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export default createOneNumberUser;
+
+
+
+
+
+
 
 
 

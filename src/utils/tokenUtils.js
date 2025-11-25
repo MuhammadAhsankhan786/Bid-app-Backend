@@ -7,10 +7,10 @@ const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || "supersecretrefreshkey";
 
 /**
- * Generate access token (short-lived, 15 minutes)
+ * Generate access token (7 days - stays logged in until user logs out)
  */
 export function generateAccessToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "15m" });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
 
 /**
@@ -44,6 +44,12 @@ export function verifyRefreshToken(token) {
     return null;
   }
 }
+
+
+
+
+
+
 
 
 

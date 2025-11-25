@@ -4,9 +4,6 @@ import pool from "../config/db.js";
 import bcrypt from "bcrypt";
 import { generateAccessToken, generateRefreshToken } from "../utils/tokenUtils.js";
 
-// In-memory OTP store with 5-minute expiry
-const otpStore = {};
-
 /**
  * Normalize Iraq phone number
  * Supports: +964, 964, 00964, or leading 0 (e.g., 07701234567)
@@ -53,21 +50,274 @@ function isValidIraqPhone(phone) {
 
 export const AuthController = {
   /**
+   * POST /api/auth/admin-login
+   * 
+   * ADMIN PANEL LOGIN ENDPOINT (NO OTP)
+   * ====================================
+   * This endpoint is used by the Admin Panel for direct phone-based login.
+   * 
+   * NO OTP REQUIRED:
+   * - Direct login with phone + role
+   * - Does NOT use Twilio Verify
+   * - Does NOT send OTP
+   * - Does NOT verify OTP
+   * - Only for admin roles: superadmin, admin, moderator, viewer
+   */
+  async adminLogin(req, res) {
+    try {
+      console.log('📱 Admin Login Request:', {
+        body: req.body,
+        phone: req.body?.phone,
+        role: req.body?.role,
+      });
+
+      const { phone, role } = req.body;
+
+      if (!phone || !role) {
+        console.log('❌ Missing phone or role:', { phone: !!phone, role: !!role });
+        return res.status(400).json({ 
+          success: false, 
+          message: "Phone number and role are required" 
+        });
+      }
+
+      // Normalize phone first
+      const normalizedPhone = normalizeIraqPhone(phone);
+      console.log('📱 Phone normalization:', { original: phone, normalized: normalizedPhone });
+      
+      // Validate phone format
+      if (!normalizedPhone) {
+        console.log('❌ Phone normalization failed:', { original: phone });
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        });
+      }
+      
+      // Validate normalized phone format
+      if (!isValidIraqPhone(phone)) {
+        console.log('❌ Invalid phone format:', { original: phone, normalized: normalizedPhone });
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        });
+      }
+
+      // Validate role
+      const normalizedRole = role.toLowerCase();
+      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer'];
+      if (!adminRoles.includes(normalizedRole)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid role. Must be one of: ${adminRoles.join(', ')}` 
+        });
+      }
+      
+      // Special handling for viewer role - can login with any Iraq phone number
+      if (normalizedRole === 'viewer') {
+        // Check if user exists, if not create viewer user
+        const viewerResult = await pool.query(
+          `SELECT id, name, email, phone, role, status 
+           FROM users 
+           WHERE phone = $1`,
+          [normalizedPhone]
+        );
+        
+        let viewerUser;
+        if (viewerResult.rows.length === 0) {
+          // Create viewer user if doesn't exist
+          const viewerEmail = `viewer${normalizedPhone.replace(/\+/g, '')}@bidmaster.com`;
+          const insertResult = await pool.query(
+            `INSERT INTO users (name, email, phone, role, status, created_at, updated_at)
+             VALUES ($1, $2, $3, 'viewer', 'approved', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+             ON CONFLICT (phone) DO UPDATE SET
+               role = 'viewer',
+               status = 'approved',
+               updated_at = CURRENT_TIMESTAMP
+             RETURNING id, name, email, phone, role, status`,
+            [`Viewer ${normalizedPhone}`, viewerEmail, normalizedPhone]
+          );
+          
+          viewerUser = insertResult.rows[0];
+          console.log(`✅ Viewer user auto-created: ${normalizedPhone}`);
+        } else {
+          viewerUser = viewerResult.rows[0];
+          
+          // Update existing user to viewer role if needed
+          if (viewerUser.role !== 'viewer') {
+            await pool.query(
+              `UPDATE users SET role = 'viewer', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+              [viewerUser.id]
+            );
+            viewerUser.role = 'viewer';
+          }
+        }
+        
+        // Check if user is blocked
+        if (viewerUser.status === 'blocked') {
+          return res.status(403).json({ 
+            success: false, 
+            message: "Account is blocked" 
+          });
+        }
+        
+        // Generate tokens
+        const tokenPayload = { 
+          id: viewerUser.id, 
+          phone: viewerUser.phone, 
+          role: 'viewer',
+          scope: 'admin'
+        };
+        const accessToken = generateAccessToken(tokenPayload);
+        const refreshToken = generateRefreshToken(tokenPayload);
+        
+        await pool.query(
+          "UPDATE users SET refresh_token = $1 WHERE id = $2",
+          [refreshToken, viewerUser.id]
+        );
+        
+        console.log('✅ Viewer login successful (any Iraq number)');
+        
+        return res.json({
+          success: true,
+          message: "Login successful",
+          accessToken,
+          refreshToken,
+          token: accessToken,
+          role: 'viewer',
+          user: {
+            id: viewerUser.id,
+            name: viewerUser.name,
+            email: viewerUser.email,
+            phone: viewerUser.phone,
+            role: 'viewer',
+            status: viewerUser.status
+          }
+        });
+      }
+
+      // Check if user exists in database with matching phone and role
+      // Also try normalized version of original phone (handles spaces)
+      const originalNormalized = normalizeIraqPhone(phone);
+      
+      // First try exact match with normalized phone and role
+      let userResult = await pool.query(
+        `SELECT id, name, email, phone, role, status 
+         FROM users 
+         WHERE phone = $1 AND role = $2`,
+        [normalizedPhone, normalizedRole]
+      );
+      
+      // If not found, try with original phone format
+      if (userResult.rows.length === 0 && phone !== normalizedPhone) {
+        userResult = await pool.query(
+          `SELECT id, name, email, phone, role, status 
+           FROM users 
+           WHERE phone = $1 AND role = $2`,
+          [phone, normalizedRole]
+        );
+      }
+      
+      // If still not found, try with originalNormalized
+      if (userResult.rows.length === 0 && originalNormalized !== normalizedPhone) {
+        userResult = await pool.query(
+          `SELECT id, name, email, phone, role, status 
+           FROM users 
+           WHERE phone = $1 AND role = $2`,
+          [originalNormalized, normalizedRole]
+        );
+      }
+      
+      // Debug: Log what we're searching for
+      console.log('🔍 Admin login search:', {
+        normalizedPhone,
+        originalPhone: phone,
+        originalNormalized,
+        role: normalizedRole,
+        found: userResult.rows.length > 0
+      });
+      
+      console.log('🔍 Database query:', {
+        normalizedPhone,
+        originalPhone: phone,
+        role: normalizedRole,
+        foundUsers: userResult.rows.length
+      });
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "Phone number not found or role mismatch. Please check your credentials." 
+        });
+      }
+
+      const user = userResult.rows[0];
+
+      // Check if user is blocked
+      if (user.status === 'blocked') {
+        return res.status(403).json({ 
+          success: false, 
+          message: "Account is blocked" 
+        });
+      }
+
+      // Normalize role - keep original role (superadmin, admin, moderator are separate roles)
+      let userRole = user.role?.toLowerCase();
+
+      // Admin panel always gets "admin" scope
+      const scope = 'admin';
+
+      // Generate access and refresh tokens with admin scope
+      const tokenPayload = { 
+        id: user.id, 
+        phone: user.phone, 
+        role: userRole,
+        scope: scope
+      };
+      const accessToken = generateAccessToken(tokenPayload);
+      const refreshToken = generateRefreshToken(tokenPayload);
+
+      // Save refresh token to database
+      await pool.query(
+        "UPDATE users SET refresh_token = $1 WHERE id = $2",
+        [refreshToken, user.id]
+      );
+
+      console.log('✅ Admin login successful (no OTP required)');
+
+      res.json({
+        success: true,
+        message: "Login successful",
+        accessToken,
+        refreshToken,
+        token: accessToken, // Keep for backward compatibility
+        role: userRole,
+        user: {
+          id: user.id,
+          name: user.name || "Super Admin",
+          email: user.email || "admin@bidmaster.dev",
+          phone: user.phone,
+          role: userRole,
+          status: user.status,
+          city: user.city || "Baghdad"
+        }
+      });
+    } catch (error) {
+      console.error("Error during admin login:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Internal server error" 
+      });
+    }
+  },
+
+  /**
    * POST /api/auth/login-phone
    * 
-   * ADMIN PANEL LOGIN ENDPOINT
-   * ===========================
-   * This endpoint is used by the Admin Panel for phone-based login.
+   * DEPRECATED: This endpoint is no longer used by Admin Panel
+   * Admin Panel now uses /api/auth/admin-login (no OTP)
    * 
-   * OTP SYSTEM:
-   * - Uses ADMIN_MOCK_OTP_ENABLED and ADMIN_MOCK_OTP_VALUE environment variables
-   * - Admin Panel OTP is completely independent from Mobile App OTP
-   * - Does NOT use otpStore (mobile OTP storage)
-   * - Does NOT use MOCK_OTP or MOCK_OTP_VALUE (those are for mobile app only)
-   * 
-   * Environment Variables:
-   * - ADMIN_MOCK_OTP_ENABLED: Set to 'true' to enable mock OTP for admin panel
-   * - ADMIN_MOCK_OTP_VALUE: The mock OTP value (default: '123456')
+   * This endpoint may still be used by legacy systems but should be migrated to admin-login
    */
   async loginPhone(req, res) {
     try {
@@ -75,8 +325,6 @@ export const AuthController = {
         body: req.body,
         phone: req.body?.phone,
         otp: req.body?.otp,
-        phoneType: typeof req.body?.phone,
-        otpType: typeof req.body?.otp,
       });
 
       const { phone, otp } = req.body;
@@ -112,43 +360,28 @@ export const AuthController = {
       }
 
       // ============================================================
-      // ADMIN PANEL OTP VERIFICATION
+      // OTP VERIFICATION USING TWILIO VERIFY API
       // ============================================================
-      // Admin Panel uses its own dedicated mock OTP system
-      // This is completely independent from Mobile App OTP (otpStore)
-      // 
-      // Admin Panel OTP Variables:
-      // - ADMIN_MOCK_OTP_ENABLED: Enable/disable admin mock OTP
-      // - ADMIN_MOCK_OTP_VALUE: Admin mock OTP value (default: '123456')
-      //
-      // NOTE: Admin Panel does NOT use:
-      // - MOCK_OTP (mobile app only)
-      // - MOCK_OTP_VALUE (mobile app only)
-      // - otpStore (mobile app OTP storage)
-      // ============================================================
-      
-      const ADMIN_MOCK_OTP_ENABLED = process.env.ADMIN_MOCK_OTP_ENABLED === 'true';
-      const ADMIN_MOCK_OTP_VALUE = process.env.ADMIN_MOCK_OTP_VALUE || '123456';
-      
-      if (ADMIN_MOCK_OTP_ENABLED) {
-        // Admin Panel Mock Mode: Validate against ADMIN_MOCK_OTP_VALUE
-        if (otp !== ADMIN_MOCK_OTP_VALUE) {
+      try {
+        const verificationResult = await TwilioService.verifyOTP(normalizedPhone, otp);
+        
+        if (!verificationResult.success || verificationResult.status !== 'approved') {
           return res.status(401).json({ 
             success: false, 
-            message: `Invalid OTP. Use ${ADMIN_MOCK_OTP_VALUE} for admin panel testing.` 
+            message: verificationResult.message || 'Invalid OTP. Please check and try again.' 
           });
         }
-      } else {
-        // Admin Panel Real Mode: Currently not implemented
-        // In production, you would integrate with a real admin OTP service here
+        
+        console.log('✅ OTP verified successfully via Twilio Verify');
+      } catch (error) {
+        console.error('❌ Twilio Verify error:', error.message);
         return res.status(401).json({ 
           success: false, 
-          message: "Admin panel OTP verification is disabled. Please enable ADMIN_MOCK_OTP_ENABLED for testing." 
+          message: error.message || 'OTP verification failed. Please try again.' 
         });
       }
 
-      // Check if user exists in database (support both admin and mobile users)
-      // Try both normalized and original phone formats
+      // Check if user exists in database
       const userResult = await pool.query(
         `SELECT id, name, email, phone, role, status 
          FROM users 
@@ -179,12 +412,10 @@ export const AuthController = {
         });
       }
 
-      // Normalize role (map legacy 'admin' to 'superadmin')
+      // For loginPhone endpoint (legacy), keep original role
+      // Note: This endpoint is deprecated for admin panel, but may still be used
       let userRole = user.role?.toLowerCase();
-      if (userRole === 'admin') {
-        userRole = 'superadmin';
-      }
-
+      
       // Determine scope based on user role: admin roles get "admin" scope, others get "mobile"
       const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer'];
       const scope = adminRoles.includes(userRole) ? 'admin' : 'mobile';
@@ -205,7 +436,6 @@ export const AuthController = {
         [refreshToken, user.id]
       );
 
-      // Return user data with default values for null fields (dev mode support)
       res.json({
         success: true,
         message: "Login successful",
@@ -235,158 +465,129 @@ export const AuthController = {
   /**
    * POST /api/auth/send-otp
    * 
-   * MOBILE APP OTP ENDPOINT
-   * ========================
-   * This endpoint is used by the Mobile App (Flutter) for OTP-based authentication.
+   * SEND OTP ENDPOINT (Flutter Mobile App Only)
+   * ============================================
    * 
    * OTP SYSTEM:
-   * - Uses MOCK_OTP and MOCK_OTP_VALUE environment variables
-   * - Mobile App OTP is completely independent from Admin Panel OTP
-   * - Uses otpStore (in-memory storage) for OTP management
-   * - Does NOT use ADMIN_MOCK_OTP_ENABLED or ADMIN_MOCK_OTP_VALUE (those are for admin panel only)
+   * - Uses Twilio Verify API to send OTP via SMS
+   * - Uses Twilio verifications.create() to send OTP
+   * - Does NOT return OTP in response
+   * - Does NOT store OTP in-memory
+   * - No mock OTP logic
    * 
-   * Environment Variables:
-   * - MOCK_OTP: Set to 'true' to enable mock OTP for mobile app
-   * - MOCK_OTP_VALUE: The mock OTP value (default: '1234')
-   * 
-   * When MOCK_OTP=true:
-   * - Returns MOCK_OTP_VALUE in response for auto-fill
-   * - Stores MOCK_OTP_VALUE in otpStore for verification
-   * 
-   * When MOCK_OTP=false:
-   * - Generates random 6-digit OTP
-   * - Stores OTP in otpStore for verification
-   * - Attempts to send via Twilio SMS (if configured)
+   * NOTE: Admin Panel does NOT use this endpoint
+   * Admin Panel uses /api/auth/admin-login (no OTP)
    */
   async sendOTP(req, res) {
     try {
       const { phone } = req.body;
       
       if (!phone) {
-        return res.status(400).json({ error: "Phone number is required" });
+        return res.status(400).json({ 
+          success: false,
+          message: "Phone number is required" 
+        });
       }
       
       // Normalize and validate
       const normalizedPhone = normalizeIraqPhone(phone);
       
       if (!isValidIraqPhone(phone)) {
-        return res.status(400).json({ error: "Only Iraq numbers allowed" });
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid phone number format. Use Iraq format: +964XXXXXXXXXX" 
+        });
       }
       
       // ============================================================
-      // MOBILE APP OTP GENERATION
+      // SEND OTP USING TWILIO VERIFY API
       // ============================================================
-      // Mobile App uses MOCK_OTP and MOCK_OTP_VALUE
-      // This is completely independent from Admin Panel OTP
-      // ============================================================
-      
-      const MOCK_OTP_ENABLED = process.env.MOCK_OTP === 'true';
-      const MOCK_OTP_VALUE = process.env.MOCK_OTP_VALUE || '1234';
-      
-      let otp;
-      if (MOCK_OTP_ENABLED) {
-        // Mock Mode: Use MOCK_OTP_VALUE
-        otp = MOCK_OTP_VALUE;
-        console.log(`[MOBILE OTP] Mock mode enabled. OTP for ${normalizedPhone}: ${otp}`);
-      } else {
-        // Real Mode: Generate random 6-digit OTP
-        otp = TwilioService.generateOTP();
-        console.log(`[MOBILE OTP] Real OTP generated for ${normalizedPhone}: ${otp} (expires in 5 minutes)`);
+      try {
+        await TwilioService.sendOTP(normalizedPhone);
+        console.log(`✅ OTP sent successfully to ${normalizedPhone} via Twilio Verify`);
+      } catch (error) {
+        console.error(`❌ Failed to send OTP via Twilio Verify:`, error.message);
         
-        // Send OTP via Twilio (real SMS)
-        try {
-          await TwilioService.sendOTP(normalizedPhone, otp);
-        } catch (error) {
-          // Log error but don't fail - OTP is logged for testing
-          console.error(`[ERROR] Failed to send OTP via Twilio: ${error.message}`);
-        }
+        // Return appropriate status code based on error type
+        const statusCode = error.message.includes('not found') || error.message.includes('not configured') ? 400 : 500;
+        
+        return res.status(statusCode).json({ 
+          success: false,
+          message: error.message || "Failed to send OTP. Please try again." 
+        });
       }
       
-      // Store OTP in-memory with expiry (used by verify-otp endpoint)
-      const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes from now
-      otpStore[normalizedPhone] = {
-        otp: otp,
-        expiresAt: expiresAt
-      };
-      
-      // Return OTP in response for auto-fill (development/testing)
-      // In production, remove this and rely on SMS only
+      // Return success response (DO NOT return OTP)
       res.json({
         success: true,
-        message: "OTP sent successfully",
-        otp: otp // Include OTP for auto-fill in development
+        message: "OTP sent successfully"
       });
     } catch (error) {
       console.error("Error sending OTP:", error);
-      res.status(500).json({ error: "Internal server error" });
+      res.status(500).json({ 
+        success: false,
+        message: "Internal server error" 
+      });
     }
   },
   
   /**
    * POST /api/auth/verify-otp
    * 
-   * MOBILE APP OTP VERIFICATION ENDPOINT
-   * ====================================
-   * This endpoint is used by the Mobile App (Flutter) to verify OTP.
+   * VERIFY OTP ENDPOINT (Flutter Mobile App Only)
+   * =============================================
    * 
    * OTP SYSTEM:
-   * - Uses MOCK_OTP and MOCK_OTP_VALUE environment variables
-   * - Mobile App OTP is completely independent from Admin Panel OTP
-   * - Uses otpStore (in-memory storage) for OTP verification
-   * - Does NOT use ADMIN_MOCK_OTP_ENABLED or ADMIN_MOCK_OTP_VALUE (those are for admin panel only)
+   * - Uses Twilio Verify API for OTP verification
+   * - Uses Twilio verificationChecks.create() to verify OTP
+   * - Does NOT use in-memory storage
+   * - No mock OTP logic
    * 
-   * Environment Variables:
-   * - MOCK_OTP: Set to 'true' to enable mock OTP for mobile app
-   * - MOCK_OTP_VALUE: The mock OTP value (default: '1234')
-   * 
-   * When MOCK_OTP=true:
-   * - Accepts MOCK_OTP_VALUE from otpStore (stored by send-otp)
-   * 
-   * When MOCK_OTP=false:
-   * - Verifies against random OTP stored in otpStore (generated by send-otp)
+   * NOTE: Admin Panel does NOT use this endpoint
+   * Admin Panel uses /api/auth/admin-login (no OTP)
    */
   async verifyOTP(req, res) {
     try {
       const { phone, otp } = req.body;
       
       if (!phone || !otp) {
-        return res.status(400).json({ error: "Phone and OTP are required" });
+        return res.status(400).json({ 
+          success: false,
+          message: "Phone and OTP are required" 
+        });
       }
       
       // Normalize phone
       const normalizedPhone = normalizeIraqPhone(phone);
       
       if (!normalizedPhone) {
-        return res.status(400).json({ error: "Invalid phone number format" });
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid phone number format" 
+        });
       }
       
       // ============================================================
-      // MOBILE APP OTP VERIFICATION
+      // VERIFY OTP USING TWILIO VERIFY API
       // ============================================================
-      // Mobile App uses otpStore (in-memory storage)
-      // This is completely independent from Admin Panel OTP
-      // ============================================================
-      
-      // Check OTP from in-memory store (populated by send-otp endpoint)
-      const storedOTP = otpStore[normalizedPhone];
-      
-      if (!storedOTP) {
-        return res.status(401).json({ error: "Invalid or expired OTP. Please request a new OTP." });
+      try {
+        const verificationResult = await TwilioService.verifyOTP(normalizedPhone, otp);
+        
+        if (!verificationResult.success || verificationResult.status !== 'approved') {
+          return res.status(401).json({ 
+            success: false,
+            message: verificationResult.message || 'Invalid OTP. Please check and try again.' 
+          });
+        }
+        
+        console.log('✅ OTP verified successfully via Twilio Verify');
+      } catch (error) {
+        console.error('❌ Twilio Verify error:', error.message);
+        return res.status(401).json({ 
+          success: false,
+          message: error.message || 'OTP verification failed. Please try again.' 
+        });
       }
-      
-      // Check if expired
-      if (Date.now() > storedOTP.expiresAt) {
-        delete otpStore[normalizedPhone];
-        return res.status(401).json({ error: "OTP expired. Please request a new OTP." });
-      }
-      
-      // Check if OTP matches (works for both mock and real OTP)
-      if (storedOTP.otp !== otp) {
-        return res.status(401).json({ error: "Invalid OTP. Please check and try again." });
-      }
-      
-      // Delete OTP after successful verification
-      delete otpStore[normalizedPhone];
       
       // Fetch user from database to get role
       const userResult = await pool.query(
@@ -395,7 +596,6 @@ export const AuthController = {
       );
       
       if (userResult.rows.length === 0) {
-        // User doesn't exist - this shouldn't happen if OTP was sent
         return res.status(404).json({ 
           success: false,
           error: "User not found. Please register first." 
@@ -412,15 +612,24 @@ export const AuthController = {
         });
       }
       
-      // Normalize role (map legacy 'admin' to 'superadmin')
+      // For Flutter app (verifyOTP), ALWAYS use 'mobile' scope
+      // This endpoint is specifically for Flutter app, so scope should always be 'mobile'
       let userRole = user.role?.toLowerCase();
-      if (userRole === 'admin') {
-        userRole = 'superadmin';
+      
+      // CRITICAL FIX: Flutter app verifyOTP always gets 'mobile' scope
+      // Even if user has admin role, Flutter app login should give mobile scope
+      // Admin roles should use admin-login endpoint, but if they use verifyOTP, give mobile scope
+      const scope = 'mobile';
+      
+      // Log warning if admin role user is using Flutter app login
+      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer'];
+      if (adminRoles.includes(userRole)) {
+        console.log(`⚠️ Warning: Admin role user (${userRole}) using Flutter app login via verifyOTP.`);
+        console.log(`   They should use admin-login endpoint, but allowing with mobile scope for compatibility.`);
       }
       
-      // Determine scope based on user role: admin roles get "admin" scope, others get "mobile"
-      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer'];
-      const scope = adminRoles.includes(userRole) ? 'admin' : 'mobile';
+      // If user has admin role but using Flutter app, we'll still give mobile scope
+      // This allows backward compatibility
       
       // Generate access and refresh tokens with appropriate scope
       const tokenPayload = { 
@@ -437,9 +646,6 @@ export const AuthController = {
         "UPDATE users SET refresh_token = $1 WHERE id = $2",
         [refreshToken, user.id]
       );
-      
-      // Delete OTP from store after successful verification
-      delete otpStore[normalizedPhone];
       
       res.json({
         success: true,
@@ -733,26 +939,15 @@ export const AuthController = {
         params.push(normalizedPhone);
       }
 
-      // 🔧 FIX: Allow users to update their role (buyer/seller only, not admin roles)
       if (role) {
         const normalizedRole = role.toLowerCase().trim();
         // Only allow buyer/seller roles to be set by users themselves
-        // Admin roles (superadmin, admin, moderator, viewer) cannot be self-assigned
         if (normalizedRole !== 'buyer' && normalizedRole !== 'seller') {
           return res.status(400).json({ 
             success: false, 
             message: "Role must be 'buyer' or 'seller'" 
           });
         }
-        
-        // Get current role before update
-        const currentUser = await pool.query('SELECT role FROM users WHERE id = $1', [userId]);
-        const currentRole = currentUser.rows[0]?.role;
-        
-        console.log('🔧 [DEEP TRACE] User updating role:');
-        console.log('   User ID:', userId);
-        console.log('   Current role:', currentRole);
-        console.log('   New role:', normalizedRole);
         
         updates.push(`role = $${paramCount++}`);
         params.push(normalizedRole);
@@ -773,23 +968,7 @@ export const AuthController = {
 
       const updatedUser = result.rows[0];
       
-      // CRITICAL: Log the updated role to verify database update
-      if (role) {
-        console.log('✅ [DEEP TRACE] Profile update completed:');
-        console.log('   User ID:', updatedUser.id);
-        console.log('   Updated role in database:', updatedUser.role);
-        console.log('   Expected role:', role.toLowerCase().trim());
-        
-        if (updatedUser.role?.toLowerCase() !== role.toLowerCase().trim()) {
-          console.log('⚠️⚠️⚠️ WARNING: Database role does not match expected role!');
-          console.log('   Database has:', updatedUser.role);
-          console.log('   Expected:', role.toLowerCase().trim());
-        } else {
-          console.log('✅ Database role matches expected role');
-        }
-      }
-
-      // 🔧 FIX: Generate new tokens when role is updated
+      // Generate new tokens when role is updated
       let responseData = {
         success: true,
         message: "Profile updated successfully",
@@ -798,7 +977,7 @@ export const AuthController = {
 
       if (role) {
         // Get scope from current token (preserve scope)
-        const scope = req.user.scope || 'mobile'; // Default to mobile for backward compatibility
+        const scope = req.user.scope || 'mobile';
         
         // Normalize role for token
         let tokenRole = updatedUser.role?.toLowerCase();
@@ -811,7 +990,7 @@ export const AuthController = {
           id: updatedUser.id,
           phone: updatedUser.phone,
           role: tokenRole,
-          scope: scope // Preserve scope from original token
+          scope: scope
         };
         
         const newAccessToken = generateAccessToken(tokenPayload);
@@ -822,9 +1001,6 @@ export const AuthController = {
           "UPDATE users SET refresh_token = $1 WHERE id = $2",
           [newRefreshToken, updatedUser.id]
         );
-
-        console.log('✅ New tokens generated with updated role:', tokenRole);
-        console.log('   Token scope preserved:', scope);
 
         // Include new tokens in response
         responseData.accessToken = newAccessToken;
@@ -908,14 +1084,14 @@ export const AuthController = {
       }
 
       // Preserve scope from the old refresh token
-      const scope = decoded.scope || 'mobile'; // Default to mobile for backward compatibility
+      const scope = decoded.scope || 'mobile';
 
       // Generate new tokens (token rotation) with preserved scope
       const tokenPayload = {
         id: user.id,
         phone: user.phone,
         role: userRole,
-        scope: scope // Preserve scope from original token
+        scope: scope
       };
       const newAccessToken = generateAccessToken(tokenPayload);
       const newRefreshToken = generateRefreshToken(tokenPayload);
@@ -964,6 +1140,196 @@ export const AuthController = {
         message: "Internal server error" 
       });
     }
+  },
+
+  /**
+   * POST /api/auth/change-phone/send-otp
+   * 
+   * SEND OTP FOR PHONE CHANGE
+   * ==========================
+   * Sends OTP to the new phone number for verification
+   * Works for both Flutter app users and Admin panel users
+   */
+  async sendChangePhoneOTP(req, res) {
+    try {
+      const { newPhone } = req.body;
+      const userId = req.user.id;
+
+      if (!newPhone) {
+        return res.status(400).json({ 
+          success: false,
+          message: "New phone number is required" 
+        });
+      }
+
+      // Normalize and validate new phone
+      const normalizedNewPhone = normalizeIraqPhone(newPhone);
+      
+      if (!isValidIraqPhone(newPhone)) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid phone number format. Use Iraq format: +964XXXXXXXXXX" 
+        });
+      }
+
+      // Check if new phone is already in use by another user
+      const existingUser = await pool.query(
+        "SELECT id FROM users WHERE phone = $1 AND id != $2",
+        [normalizedNewPhone, userId]
+      );
+
+      if (existingUser.rows.length > 0) {
+        return res.status(400).json({ 
+          success: false,
+          message: "This phone number is already in use by another account" 
+        });
+      }
+
+      // Send OTP to new phone using Twilio Verify
+      try {
+        await TwilioService.sendOTP(normalizedNewPhone);
+        console.log(`✅ Change phone OTP sent successfully to ${normalizedNewPhone} via Twilio Verify`);
+      } catch (error) {
+        console.error(`❌ Failed to send change phone OTP via Twilio Verify:`, error.message);
+        return res.status(500).json({ 
+          success: false,
+          message: error.message || "Failed to send OTP. Please try again." 
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "OTP sent successfully to new phone number"
+      });
+    } catch (error) {
+      console.error("Error sending change phone OTP:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Internal server error" 
+      });
+    }
+  },
+
+  /**
+   * POST /api/auth/change-phone/verify
+   * 
+   * VERIFY OTP AND UPDATE PHONE
+   * ============================
+   * Verifies OTP for new phone and updates user's phone number
+   * Works for both Flutter app users and Admin panel users
+   */
+  async verifyChangePhone(req, res) {
+    try {
+      const { newPhone, otp } = req.body;
+      const userId = req.user.id;
+
+      if (!newPhone || !otp) {
+        return res.status(400).json({ 
+          success: false,
+          message: "New phone number and OTP are required" 
+        });
+      }
+
+      // Normalize new phone
+      const normalizedNewPhone = normalizeIraqPhone(newPhone);
+      
+      if (!isValidIraqPhone(newPhone)) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Invalid phone number format" 
+        });
+      }
+
+      // Verify OTP using Twilio Verify
+      try {
+        const verificationResult = await TwilioService.verifyOTP(normalizedNewPhone, otp);
+        
+        if (!verificationResult.success || verificationResult.status !== 'approved') {
+          return res.status(401).json({ 
+            success: false,
+            message: verificationResult.message || 'Invalid OTP. Please check and try again.' 
+          });
+        }
+        
+        console.log('✅ Change phone OTP verified successfully via Twilio Verify');
+      } catch (error) {
+        console.error('❌ Twilio Verify error:', error.message);
+        return res.status(401).json({ 
+          success: false,
+          message: error.message || 'OTP verification failed. Please try again.' 
+        });
+      }
+
+      // Check if new phone is already in use
+      const existingUser = await pool.query(
+        "SELECT id FROM users WHERE phone = $1 AND id != $2",
+        [normalizedNewPhone, userId]
+      );
+
+      if (existingUser.rows.length > 0) {
+        return res.status(400).json({ 
+          success: false,
+          message: "This phone number is already in use by another account" 
+        });
+      }
+
+      // Update user's phone number
+      const result = await pool.query(
+        `UPDATE users 
+         SET phone = $1, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $2 
+         RETURNING id, name, email, phone, role, status`,
+        [normalizedNewPhone, userId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ 
+          success: false,
+          message: "User not found" 
+        });
+      }
+
+      const updatedUser = result.rows[0];
+
+      // Generate new tokens with updated phone
+      const tokenPayload = {
+        id: updatedUser.id,
+        phone: updatedUser.phone,
+        role: updatedUser.role?.toLowerCase() || 'buyer',
+        scope: req.user.scope || 'mobile'
+      };
+      
+      const newAccessToken = generateAccessToken(tokenPayload);
+      const newRefreshToken = generateRefreshToken(tokenPayload);
+
+      // Update refresh token in database
+      await pool.query(
+        "UPDATE users SET refresh_token = $1 WHERE id = $2",
+        [newRefreshToken, updatedUser.id]
+      );
+
+      console.log(`✅ Phone number updated successfully for user ${userId}: ${normalizedNewPhone}`);
+
+      res.json({
+        success: true,
+        message: "Phone number updated successfully",
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        user: {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          phone: updatedUser.phone,
+          role: updatedUser.role,
+          status: updatedUser.status
+        }
+      });
+    } catch (error) {
+      console.error("Error verifying change phone:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Internal server error" 
+      });
+    }
   }
 };
-

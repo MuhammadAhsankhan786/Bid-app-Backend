@@ -18,7 +18,10 @@ router.post("/register", AuthController.register);
 router.post("/login", AuthController.login);
 
 // ==================== ADMIN PANEL AUTHENTICATION ====================
-// POST /api/auth/login-phone - Admin Panel Phone-based Login (Mock OTP)
+// POST /api/auth/admin-login - Admin Panel Direct Login (NO OTP)
+router.post("/admin-login", AuthController.adminLogin);
+
+// POST /api/auth/login-phone - Legacy endpoint (deprecated for admin panel)
 router.post("/login-phone", AuthController.loginPhone);
 
 // ==================== TOKEN REFRESH ====================
@@ -31,6 +34,13 @@ router.get("/profile", verifyUser, AuthController.getProfile);
 
 // PATCH /api/auth/profile - Update user profile
 router.patch("/profile", verifyUser, AuthController.updateProfile);
+
+// ==================== CHANGE PHONE ROUTES (PROTECTED) ====================
+// POST /api/auth/change-phone/send-otp - Send OTP to new phone number
+router.post("/change-phone/send-otp", verifyUser, AuthController.sendChangePhoneOTP);
+
+// POST /api/auth/change-phone/verify - Verify OTP and update phone number
+router.post("/change-phone/verify", verifyUser, AuthController.verifyChangePhone);
 
 export default router;
 

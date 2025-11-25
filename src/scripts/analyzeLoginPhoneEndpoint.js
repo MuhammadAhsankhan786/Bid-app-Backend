@@ -29,13 +29,8 @@ function analyzeLoginPhoneEndpoint() {
         });
       }
       
-      // Verify mock OTP (1234)
-      if (otp !== '1234') {
-        return res.status(401).json({ 
-          success: false, 
-          message: "Invalid OTP. Use 1234 for testing." 
-        });
-      }
+      // OTP verification is handled by Twilio Verify API
+      // No mock OTP logic - use real Twilio verification
       
       // Check if user exists in database
       const userResult = await pool.query(
@@ -197,6 +192,12 @@ final response = await _dio.post(
 // Run analysis
 const result = analyzeLoginPhoneEndpoint();
 console.log('\n');
+
+
+
+
+
+
 
 
 

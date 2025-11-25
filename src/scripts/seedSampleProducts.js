@@ -3,8 +3,15 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+/**
+ * ⚠️ DEVELOPMENT/TESTING ONLY
+ * This script creates sample products for testing purposes.
+ * DO NOT use in production - use real product data instead.
+ */
 async function seedSampleProducts() {
   try {
+    console.log('⚠️  WARNING: This is a development/testing script.');
+    console.log('   Sample products will be created for testing only.\n');
     console.log('🌱 Starting sample products seed...');
 
     // Check if we already have approved products

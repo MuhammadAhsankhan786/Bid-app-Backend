@@ -1,3 +1,8 @@
+/**
+ * ⚠️ DEVELOPMENT/TESTING ONLY
+ * This script creates demo data for testing purposes.
+ * DO NOT use in production - use real data instead.
+ */
 import pool from "../config/db.js";
 import dotenv from "dotenv";
 

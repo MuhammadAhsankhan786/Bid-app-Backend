@@ -134,7 +134,9 @@ async function auditAuthAndRole() {
       });
       
       log('✅ OTP sent successfully', 'green');
-      const otp = otpResponse.data.otp || '1234';
+      // OTP is sent via Twilio Verify API, not returned in response
+      // For testing, check SMS for OTP code
+      const otp = process.env.TEST_OTP || 'CHECK_SMS_FOR_OTP';
       log(`   OTP: ${otp}`, 'blue');
       
       // Login with OTP
@@ -267,6 +269,12 @@ async function auditAuthAndRole() {
 }
 
 auditAuthAndRole();
+
+
+
+
+
+
 
 
 

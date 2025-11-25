@@ -31,7 +31,7 @@ async function checkBuyerSellerUsers() {
         console.log(`\n${index + 1}. Phone: ${user.phone}`);
         console.log(`   Name: ${user.name || 'N/A'}`);
         console.log(`   Role: ${user.role}`);
-        console.log(`   OTP: 1234`);
+        console.log(`   OTP: Sent via Twilio Verify API`);
       });
     } else {
       console.log('✅ Buyer/Seller Users:');
@@ -40,7 +40,7 @@ async function checkBuyerSellerUsers() {
         console.log(`   Name: ${user.name || 'N/A'}`);
         console.log(`   Role: ${user.role}`);
         console.log(`   Status: ${user.status}`);
-        console.log(`   OTP: 1234`);
+        console.log(`   OTP: Sent via Twilio Verify API`);
       });
     }
     
@@ -48,9 +48,9 @@ async function checkBuyerSellerUsers() {
     console.log('📝 Login Instructions:');
     console.log('='.repeat(60));
     console.log('1. Flutter app mein phone number enter karein');
-    console.log('2. OTP: 1234 enter karein');
-    console.log('3. Login successful!');
-    console.log('\n✅ Sabhi numbers ke liye OTP same hai: 1234');
+    console.log('2. OTP SMS me aayega (Twilio Verify API se)');
+    console.log('3. OTP enter karein aur login karein');
+    console.log('\n✅ OTP Twilio Verify API se real-time SMS me bheja jayega');
     
     process.exit(0);
   } catch (error) {

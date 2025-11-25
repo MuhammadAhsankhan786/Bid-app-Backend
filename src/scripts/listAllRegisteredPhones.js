@@ -72,7 +72,7 @@ async function listAllRegisteredPhones() {
     console.log('🔐 Login Information:');
     console.log('='.repeat(70));
     console.log('✅ All numbers can be used for login');
-    console.log('✅ OTP for all numbers: 1234');
+    console.log('✅ OTP for all numbers: Sent via Twilio Verify API (check SMS)');
     console.log('✅ Phone format: +964XXXXXXXXXX (9-10 digits after +964)');
     
     // Verify test numbers
@@ -109,6 +109,12 @@ async function listAllRegisteredPhones() {
 }
 
 listAllRegisteredPhones();
+
+
+
+
+
+
 
 
 
