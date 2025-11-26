@@ -5,7 +5,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node tests/test-runner.js",
+    "test:referral": "node tests/test-referral-system.js",
+    "test:auth": "node tests/test-auth-flow.js",
+    "test:products": "node tests/test-product-workflow.js",
+    "test:no-dummy": "node tests/test-no-dummy-data.js",
+    "clean:placeholders": "node scripts/cleanPlaceholderImages.js",
+    "fix:schema": "node scripts/fixDatabaseSchema.js",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "monitor": "node src/scripts/systemMonitor.js",
@@ -24,7 +30,11 @@
     "test:jwt-refresh": "node src/scripts/jwt_refresh_test.js",
     "migrate:refresh-token": "node src/scripts/add_refresh_token_column.js",
     "monitor:jwt": "node src/scripts/jwt_refresh_monitor.js",
-    "monitor:jwt-once": "node -e \"import('./src/scripts/jwt_refresh_monitor.js').then(m => m.runOnce().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); }))\""
+    "monitor:jwt-once": "node -e \"import('./src/scripts/jwt_refresh_monitor.js').then(m => m.runOnce().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); }))\"",
+    "verify:twilio": "node src/scripts/verifyTwilioConfig.js",
+    "fix:twilio": "node src/scripts/fixTwilioService.js",
+    "stop": "kill-port 5000 || true",
+    "restart": "npm run stop && npm run dev"
   },
   "keywords": [],
   "author": "",
@@ -43,6 +53,7 @@
     "form-data": "^4.0.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "kill-port": "^2.0.1"
   }
 }

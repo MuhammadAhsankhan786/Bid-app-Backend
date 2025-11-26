@@ -5,33 +5,19 @@ export const MobileProductController = {
   // POST /api/products/create
   async createProduct(req, res) {
     try {
-      const { title, description, image_url, startingPrice, duration, category_id } = req.body;
+      const { title, description, images, image_url, startingPrice, duration, category_id } = req.body;
       const sellerId = req.user.id;
 
-      // 🔍 DEEP TRACE: Log incoming token details
-      console.log('🔍 [DEEP TRACE] Backend createProduct - INCOMING REQUEST');
-      console.log('   Request headers:', {
-        authorization: req.headers.authorization ? req.headers.authorization.substring(0, 50) + '...' : 'MISSING',
-        'content-type': req.headers['content-type'],
-      });
-      console.log('   🔍 Decoded User from Token:');
-      console.log('      User ID:', req.user.id);
-      console.log('      User Role:', req.user.role);
-      console.log('      User Phone:', req.user.phone);
-      console.log('   🔍 Request Body:', {
-        title: title,
-        startingPrice: startingPrice,
-        hasImage: !!image_url
-      });
-
-      // Debug logging
       console.log('🔍 [CreateProduct] Request received:', {
         userId: sellerId,
         userRole: req.user.role,
         title: title,
-        hasImage: !!image_url
+        hasImages: !!images,
+        hasImageUrl: !!image_url,
+        category_id: category_id
       });
 
+      // Validation: Required fields
       if (!title || !startingPrice) {
         return res.status(400).json({
           success: false,
@@ -39,39 +25,94 @@ export const MobileProductController = {
         });
       }
 
-      // Validate seller role - case-insensitive check
+      // Validate seller role
       const userRole = (req.user.role || '').toLowerCase().trim();
       if (userRole !== 'seller') {
-        console.error('❌ [CreateProduct] Role validation failed:', {
-          expected: 'seller',
-          received: req.user.role,
-          normalized: userRole
-        });
         return res.status(403).json({
           success: false,
           message: `Only sellers can create products. Your current role: ${req.user.role || 'unknown'}`
         });
       }
 
-      console.log('✅ [CreateProduct] Role validation passed');
+      // Validate category_id if provided
+      if (category_id) {
+        const categoryCheck = await pool.query(
+          "SELECT id, active FROM categories WHERE id = $1",
+          [category_id]
+        );
+
+        if (categoryCheck.rows.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Category not found"
+          });
+        }
+
+        if (!categoryCheck.rows[0].active) {
+          return res.status(400).json({
+            success: false,
+            message: "Category is not active"
+          });
+        }
+      }
+
+      // Handle images: Support both new 'images' array and legacy 'image_url'
+      let imagesArray = [];
+      if (images && Array.isArray(images) && images.length > 0) {
+        imagesArray = images.filter(url => url && url.trim() !== '');
+      } else if (image_url) {
+        // Legacy support: convert single image_url to array
+        if (Array.isArray(image_url)) {
+          imagesArray = image_url.filter(url => url && url.trim() !== '');
+        } else if (typeof image_url === 'string' && image_url.trim() !== '') {
+          imagesArray = [image_url];
+        }
+      }
+
+      // Validate: At least 1 image required
+      if (imagesArray.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "At least one image is required"
+        });
+      }
+
+      // Validate: Maximum 6 images
+      if (imagesArray.length > 6) {
+        return res.status(400).json({
+          success: false,
+          message: "Maximum 6 images allowed"
+        });
+      }
 
       // Calculate auction end time (duration in days, default 7 days)
       const days = duration || 7;
       const auctionEndTime = new Date();
       auctionEndTime.setDate(auctionEndTime.getDate() + days);
 
-      // Create product with status 'pending'
-      // Note: Handle image_url as string (can be JSON stringified array or single URL)
-      const imageUrlValue = Array.isArray(image_url) ? JSON.stringify(image_url) : (image_url || null);
-
+      // Insert product with images as JSONB array
       const result = await pool.query(
         `INSERT INTO products 
-         (seller_id, title, description, image_url, starting_price, starting_bid, 
-          current_price, current_bid, status, auction_end_time, category_id) 
-         VALUES ($1, $2, $3, $4, $5, $5, $5, $5, 'pending', $6, $7) 
+         (seller_id, title, description, images, image_url, starting_price, starting_bid, 
+          current_price, current_bid, status, auction_end_time, category_id, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $6, $6, $6, 'pending', $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
          RETURNING *`,
-        [sellerId, title, description || null, imageUrlValue, startingPrice, auctionEndTime, category_id || null]
+        [
+          sellerId, 
+          title, 
+          description || null, 
+          JSON.stringify(imagesArray), // images as JSONB
+          imagesArray[0] || null, // image_url for backward compatibility
+          startingPrice, 
+          auctionEndTime, 
+          category_id || null
+        ]
       );
+
+      console.log('✅ [CreateProduct] Product created successfully:', {
+        productId: result.rows[0].id,
+        imagesCount: imagesArray.length
+      });
 
       res.status(201).json({
         success: true,
@@ -79,10 +120,10 @@ export const MobileProductController = {
         data: result.rows[0]
       });
     } catch (error) {
-      console.error("Error creating product:", error);
+      console.error("❌ [CreateProduct] Error:", error);
       res.status(500).json({
         success: false,
-        message: "Internal server error"
+        message: error.message || "Internal server error"
       });
     }
   },
@@ -196,7 +237,12 @@ export const MobileProductController = {
     }
   },
 
-  // GET /api/products (public - approved/live products)
+  // Alias for getMyProducts (for API consistency)
+  async getSellerProducts(req, res) {
+    return this.getMyProducts(req, res);
+  },
+
+  // GET /api/products (public - approved/live products only)
   async getAllProducts(req, res) {
     try {
       console.log('📦 GET /api/products - Request received');

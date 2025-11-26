@@ -9,7 +9,9 @@ router.get("/", MobileProductController.getAllProducts);
 
 // Protected routes - MUST come before /:id route to avoid route conflicts
 router.get("/mine", verifyUser, MobileProductController.getMyProducts);
+router.get("/seller/products", verifyUser, MobileProductController.getSellerProducts); // Alias for /mine with status filter
 router.post("/create", verifyUser, MobileProductController.createProduct);
+router.post("/seller/products", verifyUser, MobileProductController.createProduct); // Alias for /create
 router.put("/:id", verifyUser, MobileProductController.updateProduct);
 router.delete("/:id", verifyUser, MobileProductController.deleteProduct);
 

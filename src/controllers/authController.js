@@ -14,13 +14,13 @@ function normalizeIraqPhone(phone) {
   // Remove spaces and special characters except +
   let cleaned = phone.replace(/[\s-]/g, '');
   
-  // If starts with 0, replace with +964 (e.g., 07701234567 → +9647701234567)
-  if (cleaned.startsWith('0')) {
-    cleaned = '+964' + cleaned.substring(1);
+  // If starts with 00964, replace with +964 (check this FIRST before checking single 0)
+  if (cleaned.startsWith('00964')) {
+    cleaned = '+964' + cleaned.substring(5); // Remove '00964' (5 chars), keep rest
   }
-  // If starts with 00964, replace with +964
-  else if (cleaned.startsWith('00964')) {
-    cleaned = '+964' + cleaned.substring(5);
+  // If starts with 0, replace with +964 (e.g., 07701234567 → +9647701234567)
+  else if (cleaned.startsWith('0')) {
+    cleaned = '+964' + cleaned.substring(1);
   }
   // If starts with 964, add +
   else if (cleaned.startsWith('964')) {
@@ -128,12 +128,11 @@ export const AuthController = {
           // Create viewer user if doesn't exist
           const viewerEmail = `viewer${normalizedPhone.replace(/\+/g, '')}@bidmaster.com`;
           const insertResult = await pool.query(
-            `INSERT INTO users (name, email, phone, role, status, created_at, updated_at)
-             VALUES ($1, $2, $3, 'viewer', 'approved', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            `INSERT INTO users (name, email, phone, role, status, created_at)
+             VALUES ($1, $2, $3, 'viewer', 'approved', CURRENT_TIMESTAMP)
              ON CONFLICT (phone) DO UPDATE SET
                role = 'viewer',
-               status = 'approved',
-               updated_at = CURRENT_TIMESTAMP
+               status = 'approved'
              RETURNING id, name, email, phone, role, status`,
             [`Viewer ${normalizedPhone}`, viewerEmail, normalizedPhone]
           );
@@ -146,7 +145,7 @@ export const AuthController = {
           // Update existing user to viewer role if needed
           if (viewerUser.role !== 'viewer') {
             await pool.query(
-              `UPDATE users SET role = 'viewer', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+              `UPDATE users SET role = 'viewer' WHERE id = $1`,
               [viewerUser.id]
             );
             viewerUser.role = 'viewer';
@@ -479,8 +478,15 @@ export const AuthController = {
    * Admin Panel uses /api/auth/admin-login (no OTP)
    */
   async sendOTP(req, res) {
+    console.log("⚠️ SEND OTP ROUTE HIT");
     try {
       const { phone } = req.body;
+      
+      // 🔍 DEBUG: Log Twilio configuration
+      console.log('🔍 [OTP SEND] Twilio Configuration Check:');
+      console.log('   Using Twilio Service:', process.env.TWILIO_VERIFY_SID || 'NOT SET');
+      console.log('   Using Twilio Account:', process.env.TWILIO_ACCOUNT_SID || 'NOT SET');
+      console.log('   Twilio Auth Token:', process.env.TWILIO_AUTH_TOKEN ? 'SET (hidden)' : 'NOT SET');
       
       if (!phone) {
         return res.status(400).json({ 
@@ -547,10 +553,15 @@ export const AuthController = {
    * Admin Panel uses /api/auth/admin-login (no OTP)
    */
   async verifyOTP(req, res) {
+    console.log("⚠️ VERIFY OTP ROUTE HIT");
     try {
-      const { phone, otp } = req.body;
+      console.log('🔍 [VERIFY OTP] Request received');
+      console.log('   Body:', { phone: req.body?.phone, otp: req.body?.otp ? '***' : 'missing', referral_code: req.body?.referral_code || 'none' });
+      
+      const { phone, otp, referral_code } = req.body;
       
       if (!phone || !otp) {
+        console.error('❌ [VERIFY OTP] Missing phone or OTP');
         return res.status(400).json({ 
           success: false,
           message: "Phone and OTP are required" 
@@ -559,8 +570,10 @@ export const AuthController = {
       
       // Normalize phone
       const normalizedPhone = normalizeIraqPhone(phone);
+      console.log('📱 [VERIFY OTP] Phone normalization:', { original: phone, normalized: normalizedPhone });
       
       if (!normalizedPhone) {
+        console.error('❌ [VERIFY OTP] Invalid phone format');
         return res.status(400).json({ 
           success: false,
           message: "Invalid phone number format" 
@@ -590,19 +603,138 @@ export const AuthController = {
       }
       
       // Fetch user from database to get role
-      const userResult = await pool.query(
-        "SELECT id, name, email, phone, role, status FROM users WHERE phone = $1",
-        [normalizedPhone]
-      );
+      // If user doesn't exist, auto-create a buyer user (similar to admin-login creating viewer)
+      console.log('🔍 [VERIFY OTP] Checking database for user:', normalizedPhone);
       
-      if (userResult.rows.length === 0) {
-        return res.status(404).json({ 
-          success: false,
-          error: "User not found. Please register first." 
+      let user;
+      try {
+        const userResult = await pool.query(
+          "SELECT id, name, email, phone, role, status FROM users WHERE phone = $1",
+          [normalizedPhone]
+        );
+        
+        console.log('🔍 [VERIFY OTP] Database query result:', { 
+          found: userResult.rows.length > 0,
+          userId: userResult.rows[0]?.id 
         });
+        
+        if (userResult.rows.length === 0) {
+          // Auto-create buyer user if doesn't exist (mobile app users are typically buyers)
+          console.log('🔍 [VERIFY OTP] User not found, creating new buyer user');
+          const buyerEmail = `buyer${normalizedPhone.replace(/\+/g, '')}@bidmaster.com`;
+          
+          // ============================================================
+          // REFERRAL SYSTEM: Handle referral code
+          // ============================================================
+          let referralCode = null;
+          let referredBy = null;
+          let referralTransactionId = null;
+          
+          // Generate referral code for new user
+          const { generateReferralCode } = await import("../utils/referralUtils.js");
+          referralCode = await generateReferralCode();
+          console.log(`✅ Generated referral code for new user: ${referralCode}`);
+          
+          // Process referral if code provided
+          if (referral_code && typeof referral_code === 'string' && referral_code.trim().length > 0) {
+            const {
+              findInviterByCode,
+              checkFraudProtection,
+              createReferralTransaction,
+              getReferralRewardAmount
+            } = await import("../utils/referralUtils.js");
+            
+            const inviter = await findInviterByCode(referral_code.trim());
+            
+            if (inviter) {
+              // Check fraud protection
+              const fraudCheck = await checkFraudProtection(
+                inviter.id,
+                normalizedPhone,
+                req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress
+              );
+              
+              if (fraudCheck.allowed) {
+                referredBy = inviter.referral_code;
+                const rewardAmount = await getReferralRewardAmount();
+                
+                // Create referral transaction (pending status)
+                const transaction = await createReferralTransaction(
+                  inviter.id,
+                  normalizedPhone,
+                  rewardAmount
+                );
+                referralTransactionId = transaction.id;
+                
+                console.log(`✅ Referral transaction created: ${transaction.id} for inviter ${inviter.id}`);
+              } else {
+                console.log(`⚠️ Referral fraud check failed: ${fraudCheck.reason}`);
+              }
+            } else {
+              console.log(`⚠️ Invalid referral code provided: ${referral_code}`);
+            }
+          }
+          
+          try {
+            // Try INSERT first (if phone has unique constraint)
+            const insertResult = await pool.query(
+              `INSERT INTO users (name, email, phone, role, status, referral_code, referred_by, created_at)
+               VALUES ($1, $2, $3, 'buyer', 'approved', $4, $5, CURRENT_TIMESTAMP)
+               RETURNING id, name, email, phone, role, status, referral_code, referred_by`,
+              [`Buyer ${normalizedPhone}`, buyerEmail, normalizedPhone, referralCode, referredBy]
+            );
+            
+            user = insertResult.rows[0];
+            console.log(`✅ Buyer user auto-created via verifyOTP: ${normalizedPhone}`);
+            
+            // ============================================================
+            // REFERRAL SYSTEM: Award reward if referral transaction exists
+            // ============================================================
+            if (referralTransactionId && user.id) {
+              const { awardReferralReward } = await import("../utils/referralUtils.js");
+              
+              try {
+                const awardResult = await awardReferralReward(referralTransactionId, user.id);
+                
+                if (!awardResult.alreadyAwarded) {
+                  console.log(`✅ Referral reward awarded: $${awardResult.transaction.amount} to inviter`);
+                  console.log(`   New inviter balance: $${awardResult.inviterBalance}`);
+                } else {
+                  console.log(`⚠️ Referral reward already awarded for transaction ${referralTransactionId}`);
+                }
+              } catch (awardError) {
+                console.error(`❌ Error awarding referral reward:`, awardError);
+                // Don't fail user creation if award fails - log and continue
+              }
+            }
+          } catch (insertError) {
+            // If unique constraint violation, try to fetch existing user
+            if (insertError.code === '23505') { // Unique violation
+              console.log('⚠️ [VERIFY OTP] Phone already exists, fetching user');
+              const existingResult = await pool.query(
+                "SELECT id, name, email, phone, role, status FROM users WHERE phone = $1",
+                [normalizedPhone]
+              );
+              if (existingResult.rows.length > 0) {
+                user = existingResult.rows[0];
+                console.log(`✅ Found existing user: ${user.id}`);
+              } else {
+                throw insertError;
+              }
+            } else {
+              throw insertError;
+            }
+          }
+        } else {
+          user = userResult.rows[0];
+          console.log(`✅ Found existing user: ${user.id}, role: ${user.role}`);
+        }
+      } catch (dbError) {
+        console.error('❌ [VERIFY OTP] Database error:', dbError.message);
+        console.error('   Error code:', dbError.code);
+        console.error('   Error detail:', dbError.detail);
+        throw dbError;
       }
-      
-      const user = userResult.rows[0];
       
       // Check if user is blocked
       if (user.status === 'blocked') {
@@ -632,20 +764,53 @@ export const AuthController = {
       // This allows backward compatibility
       
       // Generate access and refresh tokens with appropriate scope
-      const tokenPayload = { 
-        id: user.id,
-        phone: normalizedPhone, 
-        role: userRole,
-        scope: scope
-      };
-      const accessToken = generateAccessToken(tokenPayload);
-      const refreshToken = generateRefreshToken(tokenPayload);
+      console.log('🔍 [VERIFY OTP] Generating tokens for user:', user.id);
+      
+      let accessToken, refreshToken;
+      try {
+        const tokenPayload = { 
+          id: user.id,
+          phone: normalizedPhone, 
+          role: userRole,
+          scope: scope
+        };
+        accessToken = generateAccessToken(tokenPayload);
+        refreshToken = generateRefreshToken(tokenPayload);
+        console.log('✅ [VERIFY OTP] Tokens generated successfully');
+      } catch (tokenError) {
+        console.error('❌ [VERIFY OTP] Token generation error:', tokenError.message);
+        throw new Error('Failed to generate authentication tokens');
+      }
 
       // Save refresh token to database
-      await pool.query(
-        "UPDATE users SET refresh_token = $1 WHERE id = $2",
-        [refreshToken, user.id]
+      try {
+        await pool.query(
+          "UPDATE users SET refresh_token = $1 WHERE id = $2",
+          [refreshToken, user.id]
+        );
+        console.log('✅ [VERIFY OTP] Refresh token saved to database');
+      } catch (updateError) {
+        console.error('❌ [VERIFY OTP] Failed to save refresh token:', updateError.message);
+        // Don't throw - tokens are still valid even if refresh token save fails
+      }
+      
+      // ✅ CONFIRMATION: OTP VERIFIED SUCCESSFULLY
+      console.log('========================================');
+      console.log('✅ OTP VERIFICATION: SUCCESS');
+      console.log('✅ Phone:', normalizedPhone);
+      console.log('✅ User ID:', user.id);
+      console.log('✅ Role:', userRole);
+      console.log('✅ Token Generated: YES');
+      console.log('✅ Response Sending: YES');
+      console.log('========================================');
+      
+      // Fetch user with referral info
+      const userWithReferral = await pool.query(
+        "SELECT id, name, email, phone, role, status, referral_code, reward_balance FROM users WHERE id = $1",
+        [user.id]
       );
+      
+      const fullUser = userWithReferral.rows[0] || user;
       
       res.json({
         success: true,
@@ -654,17 +819,38 @@ export const AuthController = {
         token: accessToken, // Keep for backward compatibility
         role: userRole,
         user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
+          id: fullUser.id,
+          name: fullUser.name,
+          email: fullUser.email,
+          phone: fullUser.phone,
           role: userRole,
-          status: user.status
+          status: fullUser.status,
+          referral_code: fullUser.referral_code,
+          reward_balance: parseFloat(fullUser.reward_balance) || 0
         }
       });
     } catch (error) {
-      console.error("Error verifying OTP:", error);
-      res.status(500).json({ error: "Internal server error" });
+      console.error("========================================");
+      console.error("❌ [VERIFY OTP] ERROR OCCURRED");
+      console.error("   Error message:", error.message);
+      console.error("   Error stack:", error.stack);
+      console.error("   Error code:", error.code);
+      console.error("========================================");
+      
+      // Return detailed error for debugging (in development)
+      const errorResponse = {
+        success: false,
+        error: "Internal server error",
+        message: error.message || "An error occurred during OTP verification"
+      };
+      
+      // In production, hide error details
+      if (process.env.NODE_ENV === 'production') {
+        errorResponse.message = "Internal server error";
+        delete errorResponse.error;
+      }
+      
+      res.status(500).json(errorResponse);
     }
   },
 
@@ -1276,7 +1462,7 @@ export const AuthController = {
       // Update user's phone number
       const result = await pool.query(
         `UPDATE users 
-         SET phone = $1, updated_at = CURRENT_TIMESTAMP 
+         SET phone = $1 
          WHERE id = $2 
          RETURNING id, name, email, phone, role, status`,
         [normalizedNewPhone, userId]

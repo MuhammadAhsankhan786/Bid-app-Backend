@@ -7,6 +7,7 @@ import { AnalyticsController } from "../controllers/analyticsController.js";
 import { AuctionController } from "../controllers/auctionController.js";
 import { NotificationsController } from "../controllers/notificationsController.js";
 import { SettingsController, upload } from "../controllers/settingsController.js";
+import { AdminReferralController } from "../controllers/adminReferralController.js";
 import { verifyAdmin } from "../middleware/authMiddleware.js";
 import { authorizeRoles } from "../middleware/roleMiddleware.js";
 
@@ -44,16 +45,16 @@ router.get("/dashboard/categories", authorizeRoles("superadmin", "moderator", "v
 // --- PRODUCTS ---
 // GET /products - superadmin, moderator, viewer
 router.get("/products", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getProducts);
-// GET /products/pending - superadmin, moderator
-router.get("/products/pending", authorizeRoles("superadmin", "moderator"), ProductController.getPendingProducts);
+// GET /products/pending - superadmin, moderator, viewer
+router.get("/products/pending", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getPendingProducts);
 // GET /products/live - superadmin, moderator, viewer
 router.get("/products/live", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getLiveAuctions);
 // GET /products/:id - superadmin, moderator, viewer
 router.get("/products/:id", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getProductById);
-// PATCH /products/approve/:id - superadmin only
-router.patch("/products/approve/:id", authorizeRoles("superadmin"), ProductController.approveProduct);
-// PATCH /products/reject/:id - superadmin only
-router.patch("/products/reject/:id", authorizeRoles("superadmin"), ProductController.rejectProduct);
+// PATCH /products/approve/:id - superadmin, moderator (can approve)
+router.patch("/products/approve/:id", authorizeRoles("superadmin", "moderator"), ProductController.approveProduct);
+// PATCH /products/reject/:id - superadmin, moderator (can reject)
+router.patch("/products/reject/:id", authorizeRoles("superadmin", "moderator"), ProductController.rejectProduct);
 // PUT /products/:id - superadmin only (edit product)
 router.put("/products/:id", authorizeRoles("superadmin"), ProductController.updateProduct);
 // DELETE /products/:id - superadmin only (delete product)
@@ -100,5 +101,17 @@ router.get("/payments", authorizeRoles("superadmin", "moderator"), OrderControll
 router.post("/settings/logo", authorizeRoles("superadmin"), upload.single('logo'), SettingsController.uploadLogo);
 // GET /settings/logo - superadmin only (get current logo)
 router.get("/settings/logo", authorizeRoles("superadmin"), SettingsController.getLogo);
+
+// --- REFERRALS ---
+// GET /referrals - superadmin, moderator, viewer
+router.get("/referrals", authorizeRoles("superadmin", "moderator", "viewer"), AdminReferralController.getReferrals);
+// PUT /referrals/:id/revoke - superadmin, moderator
+router.put("/referrals/:id/revoke", authorizeRoles("superadmin", "moderator"), AdminReferralController.revokeReferral);
+// PUT /users/:id/adjust-reward - superadmin, moderator
+router.put("/users/:id/adjust-reward", authorizeRoles("superadmin", "moderator"), AdminReferralController.adjustRewardBalance);
+// GET /referral/settings - superadmin, moderator, viewer
+router.get("/referral/settings", authorizeRoles("superadmin", "moderator", "viewer"), AdminReferralController.getReferralSettings);
+// PUT /referral/settings - superadmin only
+router.put("/referral/settings", authorizeRoles("superadmin"), AdminReferralController.updateReferralSettings);
 
 export default router;
