@@ -25,6 +25,14 @@ export const MobileProductController = {
         });
       }
 
+      // Validate category_id is required
+      if (!category_id) {
+        return res.status(400).json({
+          success: false,
+          message: "Category is required"
+        });
+      }
+
       // Validate seller role
       const userRole = (req.user.role || '').toLowerCase().trim();
       if (userRole !== 'seller') {
@@ -34,26 +42,24 @@ export const MobileProductController = {
         });
       }
 
-      // Validate category_id if provided
-      if (category_id) {
-        const categoryCheck = await pool.query(
-          "SELECT id, active FROM categories WHERE id = $1",
-          [category_id]
-        );
+      // Validate category_id exists and is active
+      const categoryCheck = await pool.query(
+        "SELECT id, active FROM categories WHERE id = $1",
+        [category_id]
+      );
 
-        if (categoryCheck.rows.length === 0) {
-          return res.status(400).json({
-            success: false,
-            message: "Category not found"
-          });
-        }
+      if (categoryCheck.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Category not found"
+        });
+      }
 
-        if (!categoryCheck.rows[0].active) {
-          return res.status(400).json({
-            success: false,
-            message: "Category is not active"
-          });
-        }
+      if (!categoryCheck.rows[0].active) {
+        return res.status(400).json({
+          success: false,
+          message: "Category is not active"
+        });
       }
 
       // Handle images: Support both new 'images' array and legacy 'image_url'
@@ -105,7 +111,7 @@ export const MobileProductController = {
           imagesArray[0] || null, // image_url for backward compatibility
           startingPrice, 
           auctionEndTime, 
-          category_id || null
+          category_id // Required - already validated above
         ]
       );
 

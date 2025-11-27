@@ -24,3 +24,5 @@ ALTER TABLE users DROP COLUMN IF EXISTS reward_balance;
 
 SELECT 'Rollback completed' as status;
 
+
+

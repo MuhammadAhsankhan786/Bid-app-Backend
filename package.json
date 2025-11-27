@@ -33,6 +33,8 @@
     "monitor:jwt-once": "node -e \"import('./src/scripts/jwt_refresh_monitor.js').then(m => m.runOnce().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); }))\"",
     "verify:twilio": "node src/scripts/verifyTwilioConfig.js",
     "fix:twilio": "node src/scripts/fixTwilioService.js",
+    "test:network": "node src/scripts/testNetworkConnectivity.js",
+    "verify:phone": "node src/scripts/verifyPhoneNumber.js",
     "stop": "kill-port 5000 || true",
     "restart": "npm run stop && npm run dev"
   },

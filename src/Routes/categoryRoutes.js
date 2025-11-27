@@ -10,6 +10,10 @@ router.get("/:id", CategoryController.getCategoryById);
 
 // Admin routes
 router.post("/", verifyAdmin, CategoryController.createCategory);
+router.put("/:id", verifyAdmin, CategoryController.updateCategory);
+router.delete("/:id", verifyAdmin, CategoryController.deleteCategory);
 
 export default router;
+
+
 

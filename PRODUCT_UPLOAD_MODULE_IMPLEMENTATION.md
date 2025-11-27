@@ -251,3 +251,5 @@ psql -U your_user -d your_database -f migrations/006_rollback.sql
 
 All backend APIs are implemented and ready for frontend integration!
 
+
+

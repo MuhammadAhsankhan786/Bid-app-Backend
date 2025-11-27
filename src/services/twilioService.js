@@ -113,6 +113,14 @@ export const TwilioService = {
         throw new Error('Invalid phone number format. Please use E.164 format (e.g., +9647700914000).');
       } else if (error.code === 60200) {
         throw new Error('Twilio Verify Service configuration error. Please check your Verify Service settings in Twilio Console.');
+      } else if (error.code === 21608) {
+        // Trial account - phone number not verified
+        const verifyUrl = 'https://console.twilio.com/us1/develop/phone-numbers/manage/verified';
+        throw new Error(
+          `Phone number ${phone} is not verified. Trial accounts can only send OTPs to verified numbers.\n` +
+          `Please verify this number at: ${verifyUrl}\n` +
+          `Or upgrade your Twilio account to send to any number.`
+        );
       }
       
       throw new Error(`Failed to send OTP: ${error.message}`);

@@ -27,3 +27,5 @@ ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_id_fkey;
 
 SELECT 'Rollback completed' as status;
 
+
+
