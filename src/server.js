@@ -12,6 +12,9 @@ import notificationRoutes from "./Routes/notificationRoutes.js";
 import uploadRoutes from "./Routes/uploadRoutes.js";
 import categoryRoutes from "./Routes/categoryRoutes.js";
 import referralRoutes from "./Routes/referralRoutes.js";
+import walletRoutes from "./Routes/walletRoutes.js";
+import buyerBiddingHistoryRoutes from "./Routes/buyerBiddingHistoryRoutes.js";
+import sellerEarningsRoutes from "./Routes/sellerEarningsRoutes.js";
 import cors from "cors";
 import pool from "./config/db.js";
 
@@ -116,6 +119,9 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/referral", referralRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/buyer/bidding-history", buyerBiddingHistoryRoutes);
+app.use("/api/seller/earnings", sellerEarningsRoutes);
 
 // Health check routes
 app.get("/", (req, res) => res.send("BidMaster Admin API running ✅"));

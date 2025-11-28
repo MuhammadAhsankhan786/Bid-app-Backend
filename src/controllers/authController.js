@@ -482,6 +482,34 @@ export const AuthController = {
     try {
       const { phone } = req.body;
       
+      // ============================================================
+      // OTP BYPASS FOR DEVELOPMENT (OTP_BYPASS=true)
+      // ============================================================
+      const OTP_BYPASS = process.env.OTP_BYPASS === 'true';
+      
+      if (OTP_BYPASS) {
+        console.log('⚠️ OTP DISABLED — DEVELOPMENT MODE ACTIVE');
+        console.log('   Skipping Twilio OTP send');
+        console.log('   Phone:', phone);
+        
+        if (!phone) {
+          return res.status(400).json({ 
+            success: false,
+            message: "Phone number is required" 
+          });
+        }
+        
+        // Normalize phone for consistency
+        const normalizedPhone = normalizeIraqPhone(phone);
+        
+        // Return success with mock OTP (dev mode only)
+        return res.json({
+          success: true,
+          message: "OTP disabled (dev mode)",
+          otp: "0000"
+        });
+      }
+      
       // 🔍 DEBUG: Log Twilio configuration
       console.log('🔍 [OTP SEND] Twilio Configuration Check:');
       console.log('   Using Twilio Service:', process.env.TWILIO_VERIFY_SID || 'NOT SET');
@@ -581,25 +609,39 @@ export const AuthController = {
       }
       
       // ============================================================
-      // VERIFY OTP USING TWILIO VERIFY API
+      // OTP BYPASS FOR DEVELOPMENT (OTP_BYPASS=true)
       // ============================================================
-      try {
-        const verificationResult = await TwilioService.verifyOTP(normalizedPhone, otp);
-        
-        if (!verificationResult.success || verificationResult.status !== 'approved') {
+      const OTP_BYPASS = process.env.OTP_BYPASS === 'true';
+      
+      if (OTP_BYPASS) {
+        console.log('⚠️ OTP DISABLED — DEVELOPMENT MODE ACTIVE');
+        console.log('   Skipping Twilio OTP verification');
+        console.log('   Accepting any OTP for development');
+        console.log('   Phone:', normalizedPhone);
+        console.log('   OTP provided:', otp ? '***' : 'missing');
+        // Skip Twilio verification - accept any OTP
+      } else {
+        // ============================================================
+        // VERIFY OTP USING TWILIO VERIFY API
+        // ============================================================
+        try {
+          const verificationResult = await TwilioService.verifyOTP(normalizedPhone, otp);
+          
+          if (!verificationResult.success || verificationResult.status !== 'approved') {
+            return res.status(401).json({ 
+              success: false,
+              message: verificationResult.message || 'Invalid OTP. Please check and try again.' 
+            });
+          }
+          
+          console.log('✅ OTP verified successfully via Twilio Verify');
+        } catch (error) {
+          console.error('❌ Twilio Verify error:', error.message);
           return res.status(401).json({ 
             success: false,
-            message: verificationResult.message || 'Invalid OTP. Please check and try again.' 
+            message: error.message || 'OTP verification failed. Please try again.' 
           });
         }
-        
-        console.log('✅ OTP verified successfully via Twilio Verify');
-      } catch (error) {
-        console.error('❌ Twilio Verify error:', error.message);
-        return res.status(401).json({ 
-          success: false,
-          message: error.message || 'OTP verification failed. Please try again.' 
-        });
       }
       
       // Fetch user from database to get role

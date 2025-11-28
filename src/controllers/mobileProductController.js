@@ -539,10 +539,10 @@ export const MobileProductController = {
         params.push(imageUrlValue);
       }
       if (startingPrice !== undefined) {
-        updates.push(`starting_price = $${paramCount++}`);
-        updates.push(`starting_bid = $${paramCount}`);
+        const priceParam = paramCount++;
+        updates.push(`starting_price = $${priceParam}`);
+        updates.push(`starting_bid = $${priceParam}`); // Use same parameter for both
         params.push(startingPrice);
-        paramCount++;
       }
       if (category_id !== undefined) {
         updates.push(`category_id = $${paramCount++}`);
@@ -581,10 +581,15 @@ export const MobileProductController = {
         data: fixedProduct
       });
     } catch (error) {
-      console.error("Error updating product:", error);
+      console.error("❌ Error updating product:", error);
+      console.error("   Product ID:", req.params.id);
+      console.error("   User ID:", req.user?.id);
+      console.error("   Error details:", error.message);
+      console.error("   Stack:", error.stack);
       res.status(500).json({
         success: false,
-        message: "Internal server error"
+        message: "Internal server error",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   },

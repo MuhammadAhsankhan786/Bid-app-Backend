@@ -8,6 +8,8 @@ import { AuctionController } from "../controllers/auctionController.js";
 import { NotificationsController } from "../controllers/notificationsController.js";
 import { SettingsController, upload } from "../controllers/settingsController.js";
 import { AdminReferralController } from "../controllers/adminReferralController.js";
+import { AdminWalletController } from "../controllers/adminWalletController.js";
+import { AdminSellerEarningsController } from "../controllers/adminSellerEarningsController.js";
 import { verifyAdmin } from "../middleware/authMiddleware.js";
 import { authorizeRoles } from "../middleware/roleMiddleware.js";
 
@@ -83,6 +85,8 @@ router.get("/analytics/top-products", authorizeRoles("superadmin", "viewer"), An
 router.get("/auctions/active", authorizeRoles("superadmin", "moderator", "viewer"), AuctionController.getActiveAuctions);
 // GET /auctions/:id/bids - superadmin, moderator, viewer
 router.get("/auctions/:id/bids", authorizeRoles("superadmin", "moderator", "viewer"), AuctionController.getAuctionBids);
+// GET /auction/:id/winner - superadmin, moderator, viewer (admin view of winner details)
+router.get("/auction/:id/winner", authorizeRoles("superadmin", "moderator", "viewer"), AuctionController.getAdminWinnerDetails);
 
 // --- NOTIFICATIONS (Admin - all notifications) ---
 // GET /notifications - superadmin, moderator, viewer
@@ -113,5 +117,13 @@ router.put("/users/:id/adjust-reward", authorizeRoles("superadmin", "moderator")
 router.get("/referral/settings", authorizeRoles("superadmin", "moderator", "viewer"), AdminReferralController.getReferralSettings);
 // PUT /referral/settings - superadmin only
 router.put("/referral/settings", authorizeRoles("superadmin"), AdminReferralController.updateReferralSettings);
+
+// --- WALLET ---
+// GET /wallet/logs - superadmin, moderator, viewer (view all wallet transactions)
+router.get("/wallet/logs", authorizeRoles("superadmin", "moderator", "viewer"), AdminWalletController.getWalletLogs);
+
+// --- SELLER EARNINGS (Admin View) ---
+// GET /seller/:id/earnings - superadmin, moderator, viewer (view seller's earnings)
+router.get("/seller/:id/earnings", authorizeRoles("superadmin", "moderator", "viewer"), AdminSellerEarningsController.getSellerEarnings);
 
 export default router;
