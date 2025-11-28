@@ -700,6 +700,13 @@ export const AuthController = {
                 referredBy = inviter.referral_code;
                 const rewardAmount = await getReferralRewardAmount();
                 
+                console.log(`💰 [REFERRAL] Processing referral reward:`);
+                console.log(`   Inviter ID: ${inviter.id}`);
+                console.log(`   Inviter Name: ${inviter.name}`);
+                console.log(`   Inviter Code: ${inviter.referral_code}`);
+                console.log(`   Invitee Phone: ${normalizedPhone}`);
+                console.log(`   Reward Amount: $${rewardAmount}`);
+                
                 // Create referral transaction (pending status)
                 const transaction = await createReferralTransaction(
                   inviter.id,
@@ -739,8 +746,13 @@ export const AuthController = {
                 const awardResult = await awardReferralReward(referralTransactionId, user.id);
                 
                 if (!awardResult.alreadyAwarded) {
-                  console.log(`✅ Referral reward awarded: $${awardResult.transaction.amount} to inviter`);
-                  console.log(`   New inviter balance: $${awardResult.inviterBalance}`);
+                  console.log(`💰 [REFERRAL REWARD] Successfully awarded:`);
+                  console.log(`   Amount: $${awardResult.transaction.amount}`);
+                  console.log(`   Inviter ID: ${awardResult.transaction.inviter_user_id}`);
+                  console.log(`   Invitee ID: ${user.id}`);
+                  console.log(`   Transaction ID: ${referralTransactionId}`);
+                  console.log(`   New Inviter Balance: $${awardResult.inviterBalance}`);
+                  console.log(`   Status: ${awardResult.transaction.status}`);
                 } else {
                   console.log(`⚠️ Referral reward already awarded for transaction ${referralTransactionId}`);
                 }

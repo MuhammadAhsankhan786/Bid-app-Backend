@@ -6,8 +6,18 @@ export const BuyerBiddingHistoryController = {
   // Get buyer's complete bidding history with filters
   async getBiddingHistory(req, res) {
     try {
+      console.log("=".repeat(60));
+      console.log("🔵 API HIT: /buyer/bidding-history");
+      console.log("=".repeat(60));
+      
       const userId = req.user.id;
       const { status, page = 1, limit = 20 } = req.query;
+      
+      console.log("📋 Request Details:");
+      console.log("   UserID:", userId);
+      console.log("   Status filter:", status || "all");
+      console.log("   Page:", page);
+      console.log("   Limit:", limit);
 
       let query = `
         SELECT 
@@ -83,29 +93,90 @@ export const BuyerBiddingHistoryController = {
       const countResult = await pool.query(countQuery, countParams);
       const totalCount = parseInt(countResult.rows[0].total);
 
+      // Get ALL bids for analytics (without pagination)
+      let analyticsQuery = `
+        SELECT 
+          b.amount,
+          CASE 
+            WHEN p.auction_end_time > NOW() THEN 'active'
+            WHEN p.auction_end_time <= NOW() AND p.highest_bidder_id = b.user_id THEN 'won'
+            WHEN p.auction_end_time <= NOW() AND p.highest_bidder_id != b.user_id THEN 'lost'
+            ELSE 'ended'
+          END as bid_status
+        FROM bids b
+        LEFT JOIN products p ON b.product_id = p.id
+        WHERE b.user_id = $1
+      `;
+      const analyticsParams = [userId];
+      let analyticsParamCount = 2;
+
+      // Apply same status filter for analytics
+      if (status) {
+        if (status === 'active') {
+          analyticsQuery += ` AND p.auction_end_time > NOW()`;
+        } else if (status === 'won') {
+          analyticsQuery += ` AND p.auction_end_time <= NOW() AND p.highest_bidder_id = $${analyticsParamCount}`;
+          analyticsParams.push(userId);
+          analyticsParamCount++;
+        } else if (status === 'lost') {
+          analyticsQuery += ` AND p.auction_end_time <= NOW() AND p.highest_bidder_id != $${analyticsParamCount} AND p.highest_bidder_id IS NOT NULL`;
+          analyticsParams.push(userId);
+          analyticsParamCount++;
+        } else if (status === 'ended') {
+          analyticsQuery += ` AND p.auction_end_time <= NOW()`;
+        }
+      }
+
+      const analyticsResult = await pool.query(analyticsQuery, analyticsParams);
+      const allBidsForAnalytics = analyticsResult.rows;
+
+      // Calculate analytics from ALL bids (not just current page)
+      const totalAmountBid = allBidsForAnalytics.reduce((sum, bid) => sum + (parseFloat(bid.amount) || 0), 0);
+      const activeBids = allBidsForAnalytics.filter(bid => bid.bid_status === 'active').length;
+      const wonBids = allBidsForAnalytics.filter(bid => bid.bid_status === 'won').length;
+      const lostBids = allBidsForAnalytics.filter(bid => bid.bid_status === 'lost').length;
+      const endedBids = allBidsForAnalytics.filter(bid => bid.bid_status === 'ended').length;
+      const winRate = totalCount > 0 
+        ? parseFloat(((wonBids / totalCount) * 100).toFixed(2))
+        : 0.0;
+
       // Add pagination
       const offset = (parseInt(page) - 1) * parseInt(limit);
       query += ` LIMIT $${paramCount++} OFFSET $${paramCount}`;
       params.push(parseInt(limit), offset);
 
       const result = await pool.query(query, params);
+      
+      console.log("📊 Query Results:");
+      console.log("   Rows returned:", result.rows.length);
+      console.log("   Total count (from count query):", totalCount);
 
       // Fix image URLs
       const fixedData = fixImageUrlsInResponse(result.rows);
+      
+      console.log("✅ Data processed:");
+      console.log("   Fixed data count:", fixedData.length);
+      if (fixedData.length > 0) {
+        console.log("   Sample bid:", {
+          bid_id: fixedData[0].bid_id,
+          product_title: fixedData[0].product_title,
+          amount: fixedData[0].amount,
+          bid_status: fixedData[0].bid_status
+        });
+      }
 
-      // Calculate analytics
+      // Calculate analytics from ALL bids
       const analytics = {
         total_bids: totalCount,
-        total_amount_bid: fixedData.reduce((sum, bid) => sum + (parseFloat(bid.amount) || 0), 0),
-        active_bids: fixedData.filter(bid => bid.bid_status === 'active').length,
-        won_bids: fixedData.filter(bid => bid.bid_status === 'won').length,
-        lost_bids: fixedData.filter(bid => bid.bid_status === 'lost').length,
-        win_rate: totalCount > 0 
-          ? ((fixedData.filter(bid => bid.bid_status === 'won').length / totalCount) * 100).toFixed(2)
-          : 0
+        total_amount_bid: totalAmountBid,
+        active_bids: activeBids,
+        won_bids: wonBids,
+        lost_bids: lostBids,
+        ended_bids: endedBids,
+        win_rate: winRate
       };
 
-      res.json({
+      const response = {
         success: true,
         data: fixedData,
         analytics: analytics,
@@ -115,9 +186,31 @@ export const BuyerBiddingHistoryController = {
           limit: parseInt(limit),
           pages: Math.ceil(totalCount / limit)
         }
+      };
+      
+      console.log("📤 Response Summary:");
+      console.log("   Success: true");
+      console.log("   Data items:", fixedData.length);
+      console.log("   Analytics:", {
+        total_bids: analytics.total_bids,
+        total_amount: analytics.total_amount_bid,
+        active: analytics.active_bids,
+        won: analytics.won_bids,
+        lost: analytics.lost_bids,
+        win_rate: analytics.win_rate
       });
+      console.log("   Pagination:", response.pagination);
+      console.log("=".repeat(60));
+      
+      res.json(response);
     } catch (error) {
-      console.error("Error fetching bidding history:", error);
+      console.error("=".repeat(60));
+      console.error("❌ ERROR in /buyer/bidding-history:");
+      console.error("   UserID:", req.user?.id || "unknown");
+      console.error("   Error:", error.message);
+      console.error("   Stack:", error.stack);
+      console.error("=".repeat(60));
+      
       res.status(500).json({
         success: false,
         message: "Internal server error"
@@ -125,4 +218,5 @@ export const BuyerBiddingHistoryController = {
     }
   }
 };
+
 

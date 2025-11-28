@@ -51,6 +51,10 @@ router.get("/products", authorizeRoles("superadmin", "moderator", "viewer"), Pro
 router.get("/products/pending", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getPendingProducts);
 // GET /products/live - superadmin, moderator, viewer
 router.get("/products/live", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getLiveAuctions);
+// GET /products/rejected - superadmin, moderator, viewer
+router.get("/products/rejected", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getRejectedProducts);
+// GET /products/completed - superadmin, moderator, viewer
+router.get("/products/completed", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getCompletedProducts);
 // GET /products/:id - superadmin, moderator, viewer
 router.get("/products/:id", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getProductById);
 // PATCH /products/approve/:id - superadmin, moderator (can approve)

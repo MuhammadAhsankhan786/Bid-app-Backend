@@ -94,7 +94,8 @@ export const ProductController = {
           u.name as seller_name,
           buyer.name as highest_bidder_name,
           c.name as category_name,
-          EXTRACT(EPOCH FROM (p.auction_end_time - NOW())) / 3600 as hours_left
+          EXTRACT(EPOCH FROM (p.auction_end_time - NOW())) / 3600 as hours_left,
+          (SELECT COUNT(*) FROM bids WHERE product_id = p.id) as bid_count
         FROM products p
         LEFT JOIN users u ON p.seller_id = u.id
         LEFT JOIN users buyer ON p.highest_bidder_id = buyer.id
@@ -111,6 +112,74 @@ export const ProductController = {
     } catch (error) {
       console.error("Error fetching live auctions:", error);
       res.status(500).json({ error: "Failed to fetch live auctions" });
+    }
+  },
+
+  // Get rejected products
+  async getRejectedProducts(req, res) {
+    try {
+      const result = await pool.query(`
+        SELECT 
+          p.*,
+          u.name as seller_name,
+          u.email as seller_email,
+          c.name as category_name
+        FROM products p
+        LEFT JOIN users u ON p.seller_id = u.id
+        LEFT JOIN categories c ON p.category_id = c.id
+        WHERE p.status = 'rejected'
+        ORDER BY p.updated_at DESC, p.created_at DESC
+      `);
+
+      res.json(result.rows);
+    } catch (error) {
+      console.error("Error fetching rejected products:", error);
+      res.status(500).json({ error: "Failed to fetch rejected products" });
+    }
+  },
+
+  // Get completed products (auctions that ended)
+  async getCompletedProducts(req, res) {
+    try {
+      const { page = 1, limit = 20 } = req.query;
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+
+      const result = await pool.query(`
+        SELECT 
+          p.*,
+          u.name as seller_name,
+          buyer.name as highest_bidder_name,
+          c.name as category_name,
+          (SELECT COUNT(*) FROM bids WHERE product_id = p.id) as bid_count
+        FROM products p
+        LEFT JOIN users u ON p.seller_id = u.id
+        LEFT JOIN users buyer ON p.highest_bidder_id = buyer.id
+        LEFT JOIN categories c ON p.category_id = c.id
+        WHERE p.status = 'approved' 
+          AND p.auction_end_time <= NOW()
+        ORDER BY p.auction_end_time DESC
+        LIMIT $1 OFFSET $2
+      `, [parseInt(limit), offset]);
+
+      const countResult = await pool.query(`
+        SELECT COUNT(*) as total
+        FROM products
+        WHERE status = 'approved' 
+          AND auction_end_time <= NOW()
+      `);
+
+      res.json({
+        products: result.rows,
+        pagination: {
+          total: parseInt(countResult.rows[0].total),
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(countResult.rows[0].total / limit)
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching completed products:", error);
+      res.status(500).json({ error: "Failed to fetch completed products" });
     }
   },
 
@@ -431,7 +500,7 @@ export const ProductController = {
       const { id } = req.params;
       const userRole = (req.user.role || '').toLowerCase().trim();
 
-      // Permission check: Only Super Admin can delete products from admin panel
+      // Permission check: Only Super Admin can delete products
       if (userRole !== 'superadmin') {
         return res.status(403).json({
           success: false,

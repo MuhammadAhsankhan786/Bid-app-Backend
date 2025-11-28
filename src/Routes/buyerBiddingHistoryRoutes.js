@@ -12,3 +12,4 @@ router.get("/", BuyerBiddingHistoryController.getBiddingHistory);
 
 export default router;
 
+

@@ -12,3 +12,4 @@ router.get("/", SellerEarningsController.getEarnings);
 
 export default router;
 
+
