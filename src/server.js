@@ -17,6 +17,7 @@ import buyerBiddingHistoryRoutes from "./Routes/buyerBiddingHistoryRoutes.js";
 import sellerEarningsRoutes from "./Routes/sellerEarningsRoutes.js";
 import cors from "cors";
 import pool from "./config/db.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -147,6 +148,53 @@ app.get("/api/health", async (req, res) => {
       error: error.message
     });
   }
+});
+
+// ✅ Global Error Handler (must be last middleware)
+app.use((err, req, res, next) => {
+  console.error('❌ Unhandled Error:', err);
+  console.error('Error Stack:', err.stack);
+  
+  // Don't send response if already sent
+  if (res.headersSent) {
+    return next(err);
+  }
+  
+  const statusCode = err.statusCode || err.status || 500;
+  res.status(statusCode).json({
+    success: false,
+    message: err.message || 'Internal Server Error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
+
+// ✅ 404 Handler (must be after all routes)
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.path} not found`
+  });
+});
+
+/* ======================================================
+   ✅ Error Handling for Unhandled Rejections
+====================================================== */
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  console.error('❌ Unhandled Promise Rejection:', err);
+  console.error('Error Stack:', err.stack);
+  // Don't exit in production, just log
+  if (process.env.NODE_ENV !== 'production') {
+    // In development, we might want to see the error more clearly
+  }
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+  console.error('Error Stack:', err.stack);
+  // Exit process for uncaught exceptions (they're more serious)
+  process.exit(1);
 });
 
 /* ======================================================

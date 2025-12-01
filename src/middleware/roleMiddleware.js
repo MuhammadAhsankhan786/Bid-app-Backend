@@ -82,7 +82,19 @@ export const authorizeRoles = (...allowedRoles) => {
       // Check if user role is in allowed roles list
       const normalizedAllowedRoles = allowedRoles.map(role => role.toLowerCase());
       
+      console.log('[RoleMiddleware] Authorization check:', {
+        userRole,
+        allowedRoles: normalizedAllowedRoles,
+        path: req.path,
+        method: req.method
+      });
+      
       if (!normalizedAllowedRoles.includes(userRole)) {
+        console.log('[RoleMiddleware] ❌ Access denied:', {
+          userRole,
+          required: normalizedAllowedRoles,
+          path: req.path
+        });
         return res.status(403).json({ 
           success: false, 
           message: "Access denied: insufficient privileges",
@@ -90,6 +102,11 @@ export const authorizeRoles = (...allowedRoles) => {
           current: userRole
         });
       }
+      
+      console.log('[RoleMiddleware] ✅ Access granted:', {
+        userRole,
+        path: req.path
+      });
 
       // Attach user info to request object
       req.user = {

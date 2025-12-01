@@ -21,6 +21,8 @@ const router = express.Router();
 router.use(verifyAdmin);
 
 // --- USERS ---
+// GET /users/:id - superadmin, moderator, viewer (MUST be before /users to avoid route conflict)
+router.get("/users/:id", authorizeRoles("superadmin", "moderator", "viewer"), AdminController.getUserById);
 // GET /users - superadmin, moderator
 router.get("/users", authorizeRoles("superadmin", "moderator"), AdminController.getUsers);
 // POST /users - superadmin only

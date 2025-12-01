@@ -1,23 +1,50 @@
 import pool from "../config/db.js";
+import jwt from "jsonwebtoken";
 
 export const CategoryController = {
   // GET /api/categories
-  // Get all active categories (public endpoint)
+  // Get all categories (public endpoint - returns active only)
+  // If admin token is present and valid, returns all categories (including inactive)
   async getAllCategories(req, res) {
     try {
-      const result = await pool.query(
-        `SELECT id, name, slug, description, active, created_at, updated_at
-         FROM categories 
-         WHERE active = true 
-         ORDER BY name ASC`
-      );
+      // Check if user is admin by verifying token (but don't fail if no token - it's a public route)
+      let isAdmin = false;
+      const token = req.headers.authorization?.split(" ")[1];
+      
+      if (token && process.env.JWT_SECRET) {
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          // Check if token has admin scope or user has admin role
+          if (decoded && (decoded.scope === 'admin' || ['admin', 'superadmin', 'moderator', 'viewer'].includes(decoded.role?.toLowerCase()))) {
+            isAdmin = true;
+          }
+        } catch (tokenError) {
+          // Token invalid, expired, or missing - treat as public user (don't fail)
+          // This is a public route, so we don't reject requests with invalid tokens
+          isAdmin = false;
+          // Silently ignore token errors for public routes
+        }
+      }
+      
+      let query;
+      if (isAdmin) {
+        // Admin can see all categories (including inactive)
+        query = `SELECT id, name, slug, description, active, created_at, updated_at
+                 FROM categories 
+                 ORDER BY name ASC`;
+      } else {
+        // Public users only see active categories
+        query = `SELECT id, name, slug, description, active, created_at, updated_at
+                 FROM categories 
+                 WHERE active = true 
+                 ORDER BY name ASC`;
+      }
+
+      const result = await pool.query(query);
 
       res.json({
         success: true,
-        data: result.rows.map(row => ({
-          id: row.id,
-          name: row.name
-        }))
+        data: result.rows
       });
     } catch (error) {
       console.error("Error fetching categories:", error);

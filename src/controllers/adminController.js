@@ -124,6 +124,52 @@ export const AdminController = {
     }
   },
 
+  // ✅ Get User By ID
+  async getUserById(req, res) {
+    try {
+      const { id } = req.params;
+      
+      const result = await pool.query(
+        `SELECT 
+          u.id, 
+          u.name, 
+          u.email, 
+          u.phone, 
+          u.role, 
+          u.status, 
+          u.created_at,
+          COALESCE(b.bids_count, 0) as bids_count
+        FROM users u
+        LEFT JOIN (
+          SELECT user_id, COUNT(*) as bids_count
+          FROM bids
+          GROUP BY user_id
+        ) b ON u.id = b.user_id
+        WHERE u.id = $1 AND u.role != 'admin'`,
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ 
+          success: false,
+          error: "User not found" 
+        });
+      }
+
+      res.json({
+        success: true,
+        user: result.rows[0]
+      });
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to fetch user", 
+        details: error.message 
+      });
+    }
+  },
+
   // ✅ Delete a User
   async deleteUser(req, res) {
     try {
