@@ -5,6 +5,59 @@
 
 const PLACEHOLDER_URL = 'https://placehold.co/400x300?text=No+Image';
 
+// Get base URL from environment or use default
+const getBaseUrl = () => {
+  // Check for API_BASE_URL or BACKEND_URL in environment
+  const apiBaseUrl = process.env.API_BASE_URL || process.env.BACKEND_URL || process.env.BASE_URL;
+  
+  if (apiBaseUrl) {
+    // Remove trailing slash and /api if present
+    const baseUrl = apiBaseUrl.replace(/\/api\/?$/, '').replace(/\/$/, '');
+    console.log(`🔧 [ImageFix] Using base URL from env: ${baseUrl}`);
+    return baseUrl;
+  }
+  
+  // Default based on NODE_ENV
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`🔧 [ImageFix] Production mode - using: https://api.mazaadati.com`);
+    return 'https://api.mazaadati.com';
+  }
+  
+  // Default to localhost:5000 for development
+  console.log(`🔧 [ImageFix] Development mode - using: http://localhost:5000`);
+  return 'http://localhost:5000';
+};
+
+/**
+ * Fix localhost URLs to use proper base URL
+ * @param {string} url - Image URL to fix
+ * @returns {string} - Fixed image URL
+ */
+function fixLocalhostUrl(url) {
+  if (!url || typeof url !== 'string') {
+    return url;
+  }
+  
+  // Replace localhost:5000 with proper base URL
+  const baseUrl = getBaseUrl();
+  
+  // Replace http://localhost:5000 or https://localhost:5000
+  if (url.includes('localhost:5000')) {
+    const fixedUrl = url.replace(/https?:\/\/localhost:5000/, baseUrl);
+    console.log(`🔧 [ImageFix] Fixed localhost URL: ${url} → ${fixedUrl}`);
+    return fixedUrl;
+  }
+  
+  // Replace relative paths starting with /uploads
+  if (url.startsWith('/uploads')) {
+    const fixedUrl = `${baseUrl}${url}`;
+    console.log(`🔧 [ImageFix] Fixed relative path: ${url} → ${fixedUrl}`);
+    return fixedUrl;
+  }
+  
+  return url;
+}
+
 /**
  * Check if an image URL is invalid
  * @param {string|null|undefined} url - Image URL to check
@@ -52,7 +105,9 @@ function fixImageUrl(url, context = '') {
     console.log(`🧩 [ImageFix] Replaced invalid image URL → ${originalUrl}${context ? ` (${context})` : ''}`);
     return PLACEHOLDER_URL;
   }
-  return url;
+  
+  // Fix localhost URLs before returning
+  return fixLocalhostUrl(url);
 }
 
 /**
@@ -119,6 +174,7 @@ function fixImageUrlsInResponse(data) {
 export {
   isInvalidImageUrl,
   fixImageUrl,
+  fixLocalhostUrl,
   fixImageUrlInItem,
   fixImageUrlsInArray,
   fixImageUrlsInResponse,

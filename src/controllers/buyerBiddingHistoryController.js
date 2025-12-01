@@ -22,14 +22,14 @@ export const BuyerBiddingHistoryController = {
       let query = `
         SELECT 
           b.id as bid_id,
-          b.amount,
+          b.amount::numeric as amount,
           b.created_at as bid_date,
           p.id as product_id,
           p.title as product_title,
           p.image_url as product_image,
           p.status as product_status,
           p.auction_end_time,
-          p.current_bid as current_highest_bid,
+          COALESCE(p.current_bid::numeric, 0) as current_highest_bid,
           p.highest_bidder_id,
           CASE 
             WHEN p.auction_end_time > NOW() THEN 'active'
@@ -151,8 +151,13 @@ export const BuyerBiddingHistoryController = {
       console.log("   Rows returned:", result.rows.length);
       console.log("   Total count (from count query):", totalCount);
 
-      // Fix image URLs
-      const fixedData = fixImageUrlsInResponse(result.rows);
+      // Fix image URLs and convert numeric fields to numbers
+      const fixedData = fixImageUrlsInResponse(result.rows).map(bid => ({
+        ...bid,
+        amount: parseFloat(bid.amount) || 0,
+        current_highest_bid: bid.current_highest_bid ? parseFloat(bid.current_highest_bid) : null,
+        hours_left: bid.hours_left ? parseFloat(bid.hours_left) : null
+      }));
       
       console.log("✅ Data processed:");
       console.log("   Fixed data count:", fixedData.length);
@@ -161,19 +166,20 @@ export const BuyerBiddingHistoryController = {
           bid_id: fixedData[0].bid_id,
           product_title: fixedData[0].product_title,
           amount: fixedData[0].amount,
+          amount_type: typeof fixedData[0].amount,
           bid_status: fixedData[0].bid_status
         });
       }
 
-      // Calculate analytics from ALL bids
+      // Calculate analytics from ALL bids - ensure all values are numbers
       const analytics = {
-        total_bids: totalCount,
-        total_amount_bid: totalAmountBid,
-        active_bids: activeBids,
-        won_bids: wonBids,
-        lost_bids: lostBids,
-        ended_bids: endedBids,
-        win_rate: winRate
+        total_bids: parseInt(totalCount) || 0,
+        total_amount_bid: parseFloat(totalAmountBid) || 0.0,
+        active_bids: parseInt(activeBids) || 0,
+        won_bids: parseInt(wonBids) || 0,
+        lost_bids: parseInt(lostBids) || 0,
+        ended_bids: parseInt(endedBids) || 0,
+        win_rate: parseFloat(winRate) || 0.0
       };
 
       const response = {
