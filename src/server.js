@@ -47,6 +47,15 @@ const corsOptions = {
     if (origin.includes("bidmaster-api.onrender.com")) {
       return callback(null, true);
     }
+    if (origin.includes("api.mazaadati.com")) {
+      return callback(null, true); // Production API domain
+    }
+    if (origin.includes("mazaadati.com")) {
+      return callback(null, true); // Production domain
+    }
+    if (origin.includes("bidmaster")) {
+      return callback(null, true); // Any bidmaster domain
+    }
     // Allow all temporarily for development
     return callback(null, true);
   },
