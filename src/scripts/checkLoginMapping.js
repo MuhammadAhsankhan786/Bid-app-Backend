@@ -28,8 +28,8 @@ async function checkLoginMapping() {
           WHEN 'superadmin' THEN 1
           WHEN 'admin' THEN 2
           WHEN 'moderator' THEN 3
-          WHEN 'buyer' THEN 4
-          WHEN 'seller' THEN 5
+          WHEN 'company_products' THEN 4
+          WHEN 'seller_products' THEN 5
           ELSE 6
         END,
         phone
@@ -116,7 +116,7 @@ async function checkLoginMapping() {
     const requiredPhones = [
       { phone: '+9647500914000', role: 'superadmin', name: 'Super Admin', method: 'Admin Panel (No OTP)' },
       { phone: '+9647800914000', role: 'moderator', name: 'Moderator', method: 'Admin Panel (No OTP)' },
-      { phone: '+9647700914000', role: 'buyer', name: 'Flutter User', method: 'Flutter App (OTP Required)' }
+      { phone: '+9647700914000', role: 'company_products', name: 'Flutter User', method: 'Flutter App (OTP Required)' }
     ];
     
     let allFound = true;

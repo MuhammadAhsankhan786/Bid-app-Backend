@@ -9,7 +9,7 @@ async function checkBuyerSellerUsers() {
     const buyerSellerResult = await pool.query(
       `SELECT phone, name, role, status 
        FROM users 
-       WHERE role IN ('buyer', 'seller') 
+       WHERE role IN ('company_products', 'seller_products') 
        AND phone LIKE '+964%'
        ORDER BY created_at DESC 
        LIMIT 10`

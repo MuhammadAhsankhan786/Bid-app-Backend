@@ -9,7 +9,7 @@ async function addPendingProducts() {
 
     // Get or create a seller user
     let sellerResult = await pool.query(
-      "SELECT id FROM users WHERE role = 'seller' LIMIT 1"
+      "SELECT id FROM users WHERE role = 'seller_products' LIMIT 1"
     );
 
     let sellerId;
@@ -24,7 +24,7 @@ async function addPendingProducts() {
           'Test Seller',
           'seller@test.com',
           '+9647701234999',
-          'seller',
+          'seller_products',
           'approved',
           '$2b$10$dummy'
         ]

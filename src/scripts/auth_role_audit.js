@@ -71,8 +71,8 @@ async function auditAuthAndRole() {
       
       const insertResult = await pool.query(
         `INSERT INTO users (name, email, phone, role, status, password) 
-         VALUES ($1, $2, $3, 'seller', 'approved', '') 
-         ON CONFLICT (phone) DO UPDATE SET role = 'seller', status = 'approved'
+         VALUES ($1, $2, $3, 'seller_products', 'approved', '') 
+         ON CONFLICT (phone) DO UPDATE SET role = 'seller_products', status = 'approved'
          RETURNING id, name, phone, role, status`,
         ['Test Seller', `seller@${normalizedPhone?.replace(/\+/g, '') || 'test'}.com`, normalizedPhone || testPhone]
       );
@@ -85,16 +85,16 @@ async function auditAuthAndRole() {
       log(`   ID: ${user.id}`, 'blue');
       log(`   Name: ${user.name}`, 'blue');
       log(`   Phone: ${user.phone}`, 'blue');
-      log(`   Role: ${user.role}`, user.role === 'seller' ? 'green' : 'red');
+      log(`   Role: ${user.role}`, user.role === 'seller_products' ? 'green' : 'red');
       log(`   Status: ${user.status}`, user.status === 'approved' ? 'green' : 'yellow');
       
       // Fix role if needed
-      if (user.role !== 'seller') {
-        log(`\n⚠️  Role is '${user.role}', updating to 'seller'...`, 'yellow');
+      if (user.role !== 'seller_products') {
+        log(`\n⚠️  Role is '${user.role}', updating to 'seller_products'...`, 'yellow');
         
         const updateResult = await pool.query(
           `UPDATE users 
-           SET role = 'seller' 
+           SET role = 'seller_products' 
            WHERE id = $1 
            RETURNING id, name, phone, role, status`,
           [user.id]
@@ -157,9 +157,9 @@ async function auditAuthAndRole() {
         log('\n📝 Decoded JWT Token:', 'cyan');
         log(`   ID: ${decoded.id}`, 'blue');
         log(`   Phone: ${decoded.phone}`, 'blue');
-        log(`   Role: ${decoded.role}`, decoded.role === 'seller' ? 'green' : 'red');
+        log(`   Role: ${decoded.role}`, decoded.role === 'seller_products' ? 'green' : 'red');
         
-        if (decoded.role !== 'seller') {
+        if (decoded.role !== 'seller_products') {
           log('\n❌ ERROR: JWT token does not contain "seller" role!', 'red');
           log(`   Expected: seller`, 'red');
           log(`   Got: ${decoded.role}`, 'red');
@@ -233,7 +233,7 @@ async function auditAuthAndRole() {
     const sellers = await pool.query(
       `SELECT id, name, phone, role, status 
        FROM users 
-       WHERE role = 'seller' 
+       WHERE role = 'seller_products' 
        ORDER BY id`
     );
     
@@ -245,7 +245,7 @@ async function auditAuthAndRole() {
         log(`\n${index + 1}. ${seller.name}`, 'blue');
         log(`   ID: ${seller.id}`, 'blue');
         log(`   Phone: ${seller.phone}`, 'blue');
-        log(`   Role: ${seller.role}`, seller.role === 'seller' ? 'green' : 'red');
+        log(`   Role: ${seller.role}`, seller.role === 'seller_products' ? 'green' : 'red');
         log(`   Status: ${seller.status}`, seller.status === 'approved' ? 'green' : 'yellow');
       });
     }

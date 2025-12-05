@@ -10,7 +10,7 @@ export const SellerEarningsController = {
       const userRole = req.user.role?.toLowerCase();
 
       // Verify user is seller
-      if (userRole !== 'seller') {
+      if (userRole !== 'seller_products') {
         return res.status(403).json({
           success: false,
           message: "Only sellers can access earnings"

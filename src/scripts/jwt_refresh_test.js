@@ -75,7 +75,7 @@ async function runJWTRefreshTest() {
     log('\n📋 STEP 1: Login as Seller', 'cyan');
     log('='.repeat(60), 'cyan');
 
-    const seller = await getUserByRole('seller');
+    const seller = await getUserByRole('seller_products');
     log(`   Seller: ${seller.name} (ID: ${seller.id}, Phone: ${seller.phone})`, 'blue');
 
     // Send OTP via Twilio Verify API
@@ -174,7 +174,7 @@ async function runJWTRefreshTest() {
     const expiredTokenPayload = {
       id: seller.id,
       phone: seller.phone,
-      role: 'seller'
+      role: 'seller_products'
     };
     const expiredToken = jwt.sign(expiredTokenPayload, JWT_SECRET, { expiresIn: '-1h' }); // Already expired
 

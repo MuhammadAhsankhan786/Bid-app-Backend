@@ -29,7 +29,7 @@ async function verifyUserRole() {
       // Create seller user
       const insertResult = await pool.query(
         `INSERT INTO users (name, email, phone, role, status, password) 
-         VALUES ($1, $2, $3, 'seller', 'approved', '') 
+         VALUES ($1, $2, $3, 'seller_products', 'approved', '') 
          RETURNING id, name, phone, role, status`,
         ['Test Seller', `seller@${normalizedPhone.replace(/\+/g, '')}.com`, normalizedPhone]
       );
@@ -45,12 +45,12 @@ async function verifyUserRole() {
       console.log(`   Role: ${user.role}`);
       console.log(`   Status: ${user.status}`);
       
-      if (user.role !== 'seller') {
-        console.log(`\n⚠️  Role is '${user.role}', updating to 'seller'...`);
+      if (user.role !== 'seller_products') {
+        console.log(`\n⚠️  Role is '${user.role}', updating to 'seller_products'...`);
         
         const updateResult = await pool.query(
           `UPDATE users 
-           SET role = 'seller' 
+           SET role = 'seller_products' 
            WHERE id = $1 
            RETURNING id, name, phone, role, status`,
           [user.id]
@@ -59,7 +59,7 @@ async function verifyUserRole() {
         console.log('✅ Role updated:');
         console.log(updateResult.rows[0]);
       } else {
-        console.log('\n✅ Role is already "seller"');
+        console.log('\n✅ Role is already "seller_products"');
       }
       
       if (user.status !== 'approved') {
@@ -84,7 +84,7 @@ async function verifyUserRole() {
     const sellers = await pool.query(
       `SELECT id, name, phone, role, status 
        FROM users 
-       WHERE role = 'seller' 
+       WHERE role = 'seller_products' 
        ORDER BY id`
     );
     

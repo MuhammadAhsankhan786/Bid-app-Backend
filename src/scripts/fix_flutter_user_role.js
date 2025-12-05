@@ -1,5 +1,5 @@
 /**
- * Fix Flutter User Role - Ensure +9647700914000 has role 'buyer'
+ * Fix Flutter User Role - Ensure +9647700914000 has role 'company_products'
  * This script fixes the 403 error by ensuring correct role in database
  */
 
@@ -33,23 +33,23 @@ async function fixFlutterUserRole() {
     console.log(`   Name: ${user.name || 'N/A'}\n`);
     
     // Check if role needs to be fixed
-    if (user.role?.toLowerCase() === 'buyer' || user.role?.toLowerCase() === 'seller') {
-      console.log('✅ User role is already correct (buyer/seller)');
+    if (user.role?.toLowerCase() === 'company_products' || user.role?.toLowerCase() === 'seller_products') {
+      console.log('✅ User role is already correct (company_products/seller_products)');
       console.log('   No changes needed.\n');
     } else {
-      console.log(`⚠️  User role is '${user.role}', should be 'buyer'`);
-      console.log('   Updating role to buyer...\n');
+      console.log(`⚠️  User role is '${user.role}', should be 'company_products'`);
+      console.log('   Updating role to company_products...\n');
       
-      // Update role to buyer
+      // Update role to company_products
       await pool.query(
         `UPDATE users 
-         SET role = 'buyer', 
+         SET role = 'company_products', 
              updated_at = CURRENT_TIMESTAMP 
          WHERE phone = $1`,
         [phone]
       );
       
-      console.log('✅ User role updated to buyer');
+      console.log('✅ User role updated to company_products');
       
       // Verify update
       const verifyResult = await pool.query(
@@ -59,8 +59,8 @@ async function fixFlutterUserRole() {
         [phone]
       );
       
-      if (verifyResult.rows[0].role === 'buyer') {
-        console.log('✅ Verification: Role is now buyer\n');
+      if (verifyResult.rows[0].role === 'company_products') {
+        console.log('✅ Verification: Role is now company_products\n');
       } else {
         console.log('❌ Verification failed: Role is still', verifyResult.rows[0].role);
       }

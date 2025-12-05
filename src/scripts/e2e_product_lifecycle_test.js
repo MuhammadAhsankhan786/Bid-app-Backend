@@ -564,9 +564,9 @@ async function runE2ETest() {
   try {
     // Get test users
     log('\n📋 Getting Test Users', 'cyan');
-    const seller = await getUserByRole('seller');
+    const seller = await getUserByRole('seller_products');
     const admin = await getUserByRole('superadmin') || await getUserByRole('admin');
-    const buyer = await getUserByRole('buyer');
+    const buyer = await getUserByRole('company_products');
 
     log(`   Seller: ${seller.name} (ID: ${seller.id}, Phone: ${seller.phone})`, 'blue');
     log(`   Admin: ${admin.name} (ID: ${admin.id}, Phone: ${admin.phone})`, 'blue');

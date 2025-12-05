@@ -76,7 +76,7 @@ BEGIN
     RAISE NOTICE '✅ Moderator user updated: +9647800914000';
   END IF;
 
-  -- 3. Buyer/Seller (Flutter App): +9647700914000 (Flutter App - OTP Required)
+  -- 3. Company Products/Seller Products (Flutter App): +9647700914000 (Flutter App - OTP Required)
   SELECT COUNT(*) INTO user_count FROM users WHERE phone = '+9647700914000';
   
   IF user_count = 0 THEN
@@ -85,7 +85,7 @@ BEGIN
       'Flutter User',
       'user@bidmaster.com',
       '+9647700914000',
-      'buyer',
+      'company_products',
       'approved',
       CURRENT_TIMESTAMP,
       CURRENT_TIMESTAMP
@@ -103,7 +103,7 @@ BEGIN
     SET 
       name = 'Flutter User',
       email = COALESCE(email, 'user@bidmaster.com'),
-      role = 'buyer',
+      role = 'company_products',
       status = 'approved',
       updated_at = CURRENT_TIMESTAMP
     WHERE phone = '+9647700914000';
@@ -130,8 +130,8 @@ ORDER BY
   CASE role
     WHEN 'superadmin' THEN 1
     WHEN 'moderator' THEN 2
-    WHEN 'buyer' THEN 3
-    WHEN 'seller' THEN 4
+    WHEN 'company_products' THEN 3
+    WHEN 'seller_products' THEN 4
     ELSE 5
   END;
 

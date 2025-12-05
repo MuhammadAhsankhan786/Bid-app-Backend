@@ -35,7 +35,7 @@ export const MobileProductController = {
 
       // Validate seller role
       const userRole = (req.user.role || '').toLowerCase().trim();
-      if (userRole !== 'seller') {
+      if (userRole !== 'seller_products') {
         return res.status(403).json({
           success: false,
           message: `Only sellers can create products. Your current role: ${req.user.role || 'unknown'}`
@@ -505,7 +505,7 @@ export const MobileProductController = {
       const product = productCheck.rows[0];
 
       // Permission check: Seller can edit ONLY their own products
-      if (userRole === 'seller') {
+      if (userRole === 'seller_products') {
         if (product.seller_id !== userId) {
           return res.status(403).json({
             success: false,
@@ -617,7 +617,7 @@ export const MobileProductController = {
       const product = productCheck.rows[0];
 
       // Permission check: Seller can delete ONLY their own products
-      if (userRole === 'seller') {
+      if (userRole === 'seller_products') {
         if (product.seller_id !== userId) {
           return res.status(403).json({
             success: false,

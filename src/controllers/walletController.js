@@ -28,7 +28,7 @@ export const WalletController = {
       let sellerPendingEarnings = 0;
       let earningsHistory = [];
 
-      if (userRole === 'seller') {
+      if (userRole === 'seller_products') {
         try {
           // Calculate total earnings from sold products
           const earningsResult = await pool.query(

@@ -109,7 +109,7 @@ export const MobileOrderController = {
   async getMyOrders(req, res) {
     try {
       const userId = req.user.id;
-      const { status, type } = req.query; // type: 'buyer' or 'seller'
+      const { status, type } = req.query; // type: 'company_products' or 'seller_products'
 
       let query = `
         SELECT 
@@ -132,10 +132,10 @@ export const MobileOrderController = {
       const params = [];
 
       // Filter by user role
-      if (req.user.role === 'buyer') {
+      if (req.user.role === 'company_products') {
         query += ` AND o.buyer_id = $1`;
         params.push(userId);
-      } else if (req.user.role === 'seller') {
+      } else if (req.user.role === 'seller_products') {
         query += ` AND o.seller_id = $1`;
         params.push(userId);
       } else {
@@ -145,10 +145,10 @@ export const MobileOrderController = {
       }
 
       // Filter by type if specified
-      if (type === 'buyer') {
+      if (type === 'company_products') {
         query += ` AND o.buyer_id = $${params.length + 1}`;
         params.push(userId);
-      } else if (type === 'seller') {
+      } else if (type === 'seller_products') {
         query += ` AND o.seller_id = $${params.length + 1}`;
         params.push(userId);
       }

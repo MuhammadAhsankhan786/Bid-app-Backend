@@ -129,43 +129,70 @@ export const AdminController = {
     try {
       const { id } = req.params;
       
-      const result = await pool.query(
-        `SELECT 
-          u.id, 
-          u.name, 
-          u.email, 
-          u.phone, 
-          u.role, 
-          u.status, 
-          u.created_at,
-          COALESCE(b.bids_count, 0) as bids_count
-        FROM users u
-        LEFT JOIN (
-          SELECT user_id, COUNT(*) as bids_count
-          FROM bids
-          GROUP BY user_id
-        ) b ON u.id = b.user_id
-        WHERE u.id = $1 AND u.role != 'admin'`,
+      console.log(`🔍 [getUserById] Fetching user with ID: ${id}`);
+      
+      // First check if user exists (simpler query)
+      const userCheck = await pool.query(
+        `SELECT id, name, email, phone, role, status, created_at 
+         FROM users 
+         WHERE id = $1`,
         [id]
       );
 
-      if (result.rows.length === 0) {
+      if (userCheck.rows.length === 0) {
+        console.log(`❌ [getUserById] User not found: ${id}`);
         return res.status(404).json({ 
           success: false,
           error: "User not found" 
         });
       }
 
+      const user = userCheck.rows[0];
+      
+      // Check if user is admin (exclude admin users)
+      const adminRoles = ['admin', 'superadmin', 'moderator', 'viewer'];
+      if (adminRoles.includes(user.role?.toLowerCase())) {
+        console.log(`⚠️ [getUserById] Attempted to fetch admin user: ${id}`);
+        return res.status(403).json({ 
+          success: false,
+          error: "Cannot fetch admin user details" 
+        });
+      }
+
+      // Get bids count (with error handling in case bids table doesn't exist)
+      let bidsCount = 0;
+      try {
+        const bidsResult = await pool.query(
+          `SELECT COUNT(*) as bids_count
+           FROM bids
+           WHERE user_id = $1`,
+          [id]
+        );
+        bidsCount = parseInt(bidsResult.rows[0]?.bids_count || 0);
+      } catch (bidsError) {
+        console.warn(`⚠️ [getUserById] Could not fetch bids count: ${bidsError.message}`);
+        // Continue without bids count if table doesn't exist
+      }
+
+      const userWithBids = {
+        ...user,
+        bids_count: bidsCount
+      };
+
+      console.log(`✅ [getUserById] User fetched successfully: ${id}`);
       res.json({
         success: true,
-        user: result.rows[0]
+        user: userWithBids
       });
     } catch (error) {
-      console.error("Error fetching user:", error);
+      console.error("❌ [getUserById] Error fetching user:", error);
+      console.error("   Error message:", error.message);
+      console.error("   Error code:", error.code);
+      console.error("   Error stack:", error.stack);
       res.status(500).json({ 
         success: false,
         error: "Failed to fetch user", 
-        details: error.message 
+        details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
       });
     }
   },
@@ -184,17 +211,30 @@ export const AdminController = {
         return res.status(404).json({ error: "User not found or cannot be deleted" });
       }
 
-      // Log admin action
-      await pool.query(
-        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
-         VALUES ($1, 'User deleted', 'user', $2)`,
-        [req.user.id, id]
-      );
+      // Log admin action (with error handling in case table doesn't exist)
+      try {
+        await pool.query(
+          `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
+           VALUES ($1, 'User deleted', 'user', $2)`,
+          [req.user.id, id]
+        );
+      } catch (logError) {
+        console.warn(`⚠️ [deleteUser] Could not log admin action: ${logError.message}`);
+        // Continue even if logging fails
+      }
 
-      res.json({ message: "User deleted successfully" });
+      res.json({ 
+        success: true,
+        message: "User deleted successfully",
+        data: { id: result.rows[0].id }
+      });
     } catch (error) {
-      console.error("Error deleting user:", error);
-      res.status(500).json({ error: "Failed to delete user" });
+      console.error("❌ [deleteUser] Error deleting user:", error);
+      console.error("   Error message:", error.message);
+      res.status(500).json({ 
+        error: "Failed to delete user",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 
@@ -211,17 +251,30 @@ export const AdminController = {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Log admin action
-      await pool.query(
-        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
-         VALUES ($1, 'User approved', 'user', $2)`,
-        [req.user.id, id]
-      );
+      // Log admin action (with error handling in case table doesn't exist)
+      try {
+        await pool.query(
+          `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
+           VALUES ($1, 'User approved', 'user', $2)`,
+          [req.user.id, id]
+        );
+      } catch (logError) {
+        console.warn(`⚠️ [approveUser] Could not log admin action: ${logError.message}`);
+        // Continue even if logging fails
+      }
 
-      res.json({ message: "User approved successfully", user: result.rows[0] });
+      res.json({ 
+        success: true,
+        message: "User approved successfully", 
+        user: result.rows[0] 
+      });
     } catch (error) {
-      console.error("Error approving user:", error);
-      res.status(500).json({ error: "Failed to approve user" });
+      console.error("❌ [approveUser] Error approving user:", error);
+      console.error("   Error message:", error.message);
+      res.status(500).json({ 
+        error: "Failed to approve user",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 
@@ -238,17 +291,30 @@ export const AdminController = {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Log admin action
-      await pool.query(
-        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
-         VALUES ($1, 'User blocked', 'user', $2)`,
-        [req.user.id, id]
-      );
+      // Log admin action (with error handling in case table doesn't exist)
+      try {
+        await pool.query(
+          `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
+           VALUES ($1, 'User blocked', 'user', $2)`,
+          [req.user.id, id]
+        );
+      } catch (logError) {
+        console.warn(`⚠️ [blockUser] Could not log admin action: ${logError.message}`);
+        // Continue even if logging fails
+      }
 
-      res.json({ message: "User blocked successfully", user: result.rows[0] });
+      res.json({ 
+        success: true,
+        message: "User blocked successfully", 
+        user: result.rows[0] 
+      });
     } catch (error) {
-      console.error("Error blocking user:", error);
-      res.status(500).json({ error: "Failed to block user" });
+      console.error("❌ [blockUser] Error blocking user:", error);
+      console.error("   Error message:", error.message);
+      res.status(500).json({ 
+        error: "Failed to block user",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 
@@ -397,8 +463,8 @@ export const AdminController = {
       const { id } = req.params;
       const { role } = req.body;
 
-      if (!role || !['buyer', 'seller', 'admin'].includes(role)) {
-        return res.status(400).json({ error: "Valid role (buyer, seller, admin) is required" });
+      if (!role || !['company_products', 'seller_products', 'admin', 'superadmin', 'moderator', 'viewer'].includes(role)) {
+        return res.status(400).json({ error: "Valid role (company_products, seller_products, admin) is required" });
       }
 
       const result = await pool.query(

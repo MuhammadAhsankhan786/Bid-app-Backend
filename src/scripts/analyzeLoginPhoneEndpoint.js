@@ -93,7 +93,7 @@ function analyzeLoginPhoneEndpoint() {
           name: 'User Name',
           email: 'user@example.com',
           phone: '+9647701234567',
-          role: 'buyer',
+          role: 'company_products',
           status: 'approved'
         }
       }

@@ -4,31 +4,42 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { verifyUser } from "../middleware/authMiddleware.js";
 import fs from "fs";
+import { uploadToCloudinary, isConfigured as isCloudinaryConfigured } from "../config/cloudinary.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, '../../uploads/products');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+// Use memory storage for Cloudinary uploads (we'll upload buffer directly)
+// Fallback to disk storage if Cloudinary is not configured
+const useCloudinary = isCloudinaryConfigured();
 
-// Configure multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename: timestamp-random-originalname
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const basename = path.basename(file.originalname, ext);
-    cb(null, `${basename}-${uniqueSuffix}${ext}`);
+let storage;
+if (useCloudinary) {
+  // Memory storage for Cloudinary
+  storage = multer.memoryStorage();
+  console.log('☁️  Using Cloudinary for image uploads');
+} else {
+  // Disk storage as fallback
+  const uploadsDir = path.join(__dirname, '../../uploads/products');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
   }
-});
+  storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+      // Generate unique filename: timestamp-random-originalname
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const ext = path.extname(file.originalname);
+      const basename = path.basename(file.originalname, ext);
+      cb(null, `${basename}-${uniqueSuffix}${ext}`);
+    }
+  });
+  console.log('📁 Using local disk storage (Cloudinary not configured)');
+}
 
 // File filter - only images
 const fileFilter = (req, file, cb) => {
@@ -53,7 +64,7 @@ const upload = multer({
 });
 
 // POST /api/uploads/image - Upload single image
-router.post('/image', verifyUser, upload.single('image'), (req, res) => {
+router.post('/image', verifyUser, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -62,27 +73,54 @@ router.post('/image', verifyUser, upload.single('image'), (req, res) => {
       });
     }
 
-    // Generate URL for the uploaded image
-    // For localhost: http://localhost:5000/uploads/products/filename
-    // For production: use your domain
-    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
-    const imageUrl = `${baseUrl}/uploads/products/${req.file.filename}`;
+    let imageUrl;
+    let filename = req.file.originalname;
+    let size = req.file.size;
+    let mimetype = req.file.mimetype;
 
-    console.log('✅ [UploadImage] Image uploaded successfully:', {
-      filename: req.file.filename,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      url: imageUrl
-    });
+    if (useCloudinary) {
+      // Upload to Cloudinary
+      try {
+        const uploadResult = await uploadToCloudinary(req.file.buffer, {
+          public_id: `product-${Date.now()}-${Math.round(Math.random() * 1E9)}`,
+        });
+
+        imageUrl = uploadResult.secure_url;
+        filename = uploadResult.public_id;
+        size = uploadResult.bytes;
+        mimetype = `image/${uploadResult.format}`;
+
+        console.log('✅ [UploadImage] Image uploaded to Cloudinary:', {
+          public_id: uploadResult.public_id,
+          size: uploadResult.bytes,
+          format: uploadResult.format,
+          url: imageUrl
+        });
+      } catch (cloudinaryError) {
+        console.error('❌ [UploadImage] Cloudinary upload failed:', cloudinaryError);
+        throw new Error(`Cloudinary upload failed: ${cloudinaryError.message}`);
+      }
+    } else {
+      // Fallback to local storage
+      const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+      imageUrl = `${baseUrl}/uploads/products/${req.file.filename}`;
+
+      console.log('✅ [UploadImage] Image saved locally:', {
+        filename: req.file.filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+        url: imageUrl
+      });
+    }
 
     res.json({
       success: true,
       message: 'Image uploaded successfully',
       data: {
-        filename: req.file.filename,
+        filename: filename,
         originalName: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
+        size: size,
+        mimetype: mimetype,
         url: imageUrl
       }
     });
@@ -96,7 +134,7 @@ router.post('/image', verifyUser, upload.single('image'), (req, res) => {
 });
 
 // POST /api/uploads/images - Upload multiple images
-router.post('/images', verifyUser, upload.array('images', 5), (req, res) => {
+router.post('/images', verifyUser, upload.array('images', 5), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
@@ -105,18 +143,49 @@ router.post('/images', verifyUser, upload.array('images', 5), (req, res) => {
       });
     }
 
-    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
-    const uploadedImages = req.files.map(file => ({
-      filename: file.filename,
-      originalName: file.originalname,
-      size: file.size,
-      mimetype: file.mimetype,
-      url: `${baseUrl}/uploads/products/${file.filename}`
-    }));
+    const uploadedImages = [];
 
-    console.log('✅ [UploadImages] Images uploaded successfully:', {
-      count: uploadedImages.length
-    });
+    if (useCloudinary) {
+      // Upload all images to Cloudinary
+      for (const file of req.files) {
+        try {
+          const uploadResult = await uploadToCloudinary(file.buffer, {
+            public_id: `product-${Date.now()}-${Math.round(Math.random() * 1E9)}`,
+          });
+
+          uploadedImages.push({
+            filename: uploadResult.public_id,
+            originalName: file.originalname,
+            size: uploadResult.bytes,
+            mimetype: `image/${uploadResult.format}`,
+            url: uploadResult.secure_url
+          });
+        } catch (cloudinaryError) {
+          console.error(`❌ [UploadImages] Failed to upload ${file.originalname}:`, cloudinaryError);
+          throw new Error(`Failed to upload ${file.originalname}: ${cloudinaryError.message}`);
+        }
+      }
+
+      console.log('✅ [UploadImages] Images uploaded to Cloudinary:', {
+        count: uploadedImages.length
+      });
+    } else {
+      // Fallback to local storage
+      const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+      for (const file of req.files) {
+        uploadedImages.push({
+          filename: file.filename,
+          originalName: file.originalname,
+          size: file.size,
+          mimetype: file.mimetype,
+          url: `${baseUrl}/uploads/products/${file.filename}`
+        });
+      }
+
+      console.log('✅ [UploadImages] Images saved locally:', {
+        count: uploadedImages.length
+      });
+    }
 
     res.json({
       success: true,

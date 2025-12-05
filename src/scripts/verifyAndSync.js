@@ -167,8 +167,8 @@ async function seedEmptyTables() {
           INSERT INTO users (name, email, phone, role, status, password)
           VALUES 
             ('Admin User', 'admin@demo.com', '+9647700000001', 'admin', 'active', $1),
-            ('Provider User', 'provider@demo.com', '+9647700000002', 'seller', 'approved', $2),
-            ('Reception User', 'reception@demo.com', '+9647700000003', 'buyer', 'approved', $3)
+            ('Provider User', 'provider@demo.com', '+9647700000002', 'seller_products', 'approved', $2),
+            ('Reception User', 'reception@demo.com', '+9647700000003', 'company_products', 'approved', $3)
           ON CONFLICT (email) DO NOTHING
         `, [hashedPassword, hashedPassword, hashedPassword]);
         
@@ -198,7 +198,7 @@ async function seedEmptyTables() {
       console.log("Seeding products table...");
       
       // Get a seller user
-      const sellerResult = await pool.query("SELECT id FROM users WHERE role = 'seller' LIMIT 1");
+      const sellerResult = await pool.query("SELECT id FROM users WHERE role = 'seller_products' LIMIT 1");
       if (sellerResult.rows.length > 0) {
         const sellerId = sellerResult.rows[0].id;
         const categoryResult = await pool.query("SELECT id FROM categories LIMIT 1");
@@ -222,7 +222,7 @@ async function seedEmptyTables() {
       console.log("Seeding bids table...");
       
       const productResult = await pool.query("SELECT id FROM products LIMIT 1");
-      const buyerResult = await pool.query("SELECT id FROM users WHERE role = 'buyer' LIMIT 1");
+      const buyerResult = await pool.query("SELECT id FROM users WHERE role = 'company_products' LIMIT 1");
       
       if (productResult.rows.length > 0 && buyerResult.rows.length > 0) {
         const productId = productResult.rows[0].id;
@@ -248,7 +248,7 @@ async function seedEmptyTables() {
         FROM products p 
         LIMIT 1
       `);
-      const buyerResult = await pool.query("SELECT id FROM users WHERE role = 'buyer' LIMIT 1");
+      const buyerResult = await pool.query("SELECT id FROM users WHERE role = 'company_products' LIMIT 1");
       
       if (productResult.rows.length > 0 && buyerResult.rows.length > 0) {
         const product = productResult.rows[0];

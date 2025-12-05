@@ -286,9 +286,9 @@ async function runE2EVerification() {
   try {
     // Get test users
     log('\n👥 Getting Test Users...', 'cyan');
-    const seller = await getUserByRole('seller');
+    const seller = await getUserByRole('seller_products');
     const admin = await getUserByRole('superadmin') || await getUserByRole('admin');
-    const buyer = await getUserByRole('buyer');
+    const buyer = await getUserByRole('company_products');
 
     if (!seller) {
       log('❌ No seller user found', 'red');

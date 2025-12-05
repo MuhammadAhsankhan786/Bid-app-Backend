@@ -108,7 +108,7 @@ async function verifyIntegration() {
 
     // Check users count
     const usersCount = await pool.query("SELECT COUNT(*) as count FROM users");
-    const sellersCount = await pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'seller'");
+    const sellersCount = await pool.query("SELECT COUNT(*) as count FROM users WHERE role = 'seller_products'");
     console.log(`\n👥 Users Count: ${usersCount.rows[0].count} (${sellersCount.rows[0].count} sellers)`);
 
     // Check categories count

@@ -19,7 +19,7 @@ async function updateConstraint() {
     await pool.query(`
       ALTER TABLE users 
       ADD CONSTRAINT users_role_check 
-      CHECK (role IN ('admin', 'superadmin', 'moderator', 'viewer', 'buyer', 'seller'))
+      CHECK (role IN ('admin', 'superadmin', 'moderator', 'viewer', 'company_products', 'seller_products'))
     `);
     
     console.log('✅ Added new constraint with all roles\n');

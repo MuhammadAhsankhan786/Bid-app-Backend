@@ -353,7 +353,7 @@ async function getOrCreateSeller() {
   try {
     // Try to find an existing seller
     let result = await pool.query(
-      "SELECT id FROM users WHERE role = 'seller' AND status = 'approved' LIMIT 1"
+      "SELECT id FROM users WHERE role = 'seller_products' AND status = 'approved' LIMIT 1"
     );
     
     if (result.rows.length > 0) {
@@ -364,13 +364,13 @@ async function getOrCreateSeller() {
     result = await pool.query(
       `INSERT INTO users (name, email, phone, role, status, password) 
        VALUES ($1, $2, $3, $4, $5, $6) 
-       ON CONFLICT (phone) DO UPDATE SET role = 'seller', status = 'approved'
+       ON CONFLICT (phone) DO UPDATE SET role = 'seller_products', status = 'approved'
        RETURNING id`,
       [
         'Demo Seller',
         'seller@bidmaster.com',
         '+9647701234999',
-        'seller',
+        'seller_products',
         'approved',
         '$2b$10$dummy' // Dummy password
       ]

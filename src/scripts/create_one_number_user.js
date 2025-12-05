@@ -52,7 +52,7 @@ async function createOneNumberUser() {
         `user+${ONE_NUMBER_LOGIN_PHONE.replace(/\+/g, '')}@bidmaster.com`,
         ONE_NUMBER_LOGIN_PHONE,
         hashedPassword,
-        'buyer', // Default role, can be changed via role selection
+        'company_products', // Default role, can be changed via role selection
         'approved'
       ]
     );

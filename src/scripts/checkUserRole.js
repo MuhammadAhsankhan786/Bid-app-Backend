@@ -21,8 +21,8 @@ async function checkUserRole() {
     console.log(`   Phone: ${user.phone}`);
     console.log(`   Role: ${user.role}`);
     console.log(`   Status: ${user.status}`);
-    console.log(`\n💡 To place bids, role must be 'buyer'`);
-    console.log(`   Current role: '${user.role}' ${user.role === 'buyer' ? '✅' : '❌'}`);
+    console.log(`\n💡 To place bids, role must be 'company_products'`);
+    console.log(`   Current role: '${user.role}' ${user.role === 'company_products' ? '✅' : '❌'}`);
   } catch (error) {
     console.error("Error:", error);
   } finally {

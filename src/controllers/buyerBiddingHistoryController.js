@@ -96,7 +96,7 @@ export const BuyerBiddingHistoryController = {
       // Get ALL bids for analytics (without pagination)
       let analyticsQuery = `
         SELECT 
-          b.amount,
+          b.amount::numeric as amount,
           CASE 
             WHEN p.auction_end_time > NOW() THEN 'active'
             WHEN p.auction_end_time <= NOW() AND p.highest_bidder_id = b.user_id THEN 'won'
@@ -131,7 +131,11 @@ export const BuyerBiddingHistoryController = {
       const allBidsForAnalytics = analyticsResult.rows;
 
       // Calculate analytics from ALL bids (not just current page)
-      const totalAmountBid = allBidsForAnalytics.reduce((sum, bid) => sum + (parseFloat(bid.amount) || 0), 0);
+      // Ensure all amounts are converted to numbers
+      const totalAmountBid = allBidsForAnalytics.reduce((sum, bid) => {
+        const amount = typeof bid.amount === 'string' ? parseFloat(bid.amount) : (bid.amount || 0);
+        return sum + (isNaN(amount) ? 0 : amount);
+      }, 0);
       const activeBids = allBidsForAnalytics.filter(bid => bid.bid_status === 'active').length;
       const wonBids = allBidsForAnalytics.filter(bid => bid.bid_status === 'won').length;
       const lostBids = allBidsForAnalytics.filter(bid => bid.bid_status === 'lost').length;
@@ -171,16 +175,26 @@ export const BuyerBiddingHistoryController = {
         });
       }
 
-      // Calculate analytics from ALL bids - ensure all values are numbers
+      // Calculate analytics from ALL bids - ensure all values are numbers (not strings)
       const analytics = {
-        total_bids: parseInt(totalCount) || 0,
-        total_amount_bid: parseFloat(totalAmountBid) || 0.0,
-        active_bids: parseInt(activeBids) || 0,
-        won_bids: parseInt(wonBids) || 0,
-        lost_bids: parseInt(lostBids) || 0,
-        ended_bids: parseInt(endedBids) || 0,
-        win_rate: parseFloat(winRate) || 0.0
+        total_bids: Number(parseInt(totalCount)) || 0,
+        total_amount_bid: Number(parseFloat(totalAmountBid)) || 0.0,
+        active_bids: Number(parseInt(activeBids)) || 0,
+        won_bids: Number(parseInt(wonBids)) || 0,
+        lost_bids: Number(parseInt(lostBids)) || 0,
+        ended_bids: Number(parseInt(endedBids)) || 0,
+        win_rate: Number(parseFloat(winRate)) || 0.0
       };
+      
+      // Double-check: Ensure all analytics values are actual numbers, not strings
+      Object.keys(analytics).forEach(key => {
+        const value = analytics[key];
+        if (typeof value === 'string') {
+          analytics[key] = key.includes('rate') || key.includes('amount') 
+            ? parseFloat(value) || 0.0 
+            : parseInt(value) || 0;
+        }
+      });
 
       const response = {
         success: true,

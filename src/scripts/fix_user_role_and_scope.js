@@ -1,7 +1,7 @@
 /**
  * Fix User Role and Scope Issue
  * This script fixes the 403 error by:
- * 1. Ensuring +9647700914000 has role 'buyer' (not 'superadmin')
+ * 1. Ensuring +9647700914000 has role 'company_products' (not 'superadmin')
  * 2. Verifying the user can login via Flutter app
  */
 
@@ -49,18 +49,18 @@ async function fixUserRoleAndScope() {
       console.log(`   Flutter app requires 'mobile' scope`);
       console.log(`   Result: 403 Forbidden error\n`);
       
-      console.log('🔧 FIXING: Updating role to buyer...\n');
+      console.log('🔧 FIXING: Updating role to company_products...\n');
       
-      // Update role to buyer
+      // Update role to company_products
       await pool.query(
         `UPDATE users 
-         SET role = 'buyer', 
+         SET role = 'company_products', 
              updated_at = CURRENT_TIMESTAMP 
          WHERE phone = $1`,
         [phone]
       );
       
-      console.log('✅ User role updated to buyer');
+      console.log('✅ User role updated to company_products');
       
       // Verify update
       const verifyResult = await pool.query(
@@ -71,13 +71,13 @@ async function fixUserRoleAndScope() {
       );
       
       const updatedUser = verifyResult.rows[0];
-      if (updatedUser.role === 'buyer') {
-        console.log('✅ Verification: Role is now buyer\n');
+      if (updatedUser.role === 'company_products') {
+        console.log('✅ Verification: Role is now company_products\n');
       } else {
         console.log('❌ Verification failed: Role is still', updatedUser.role);
       }
     } else {
-      console.log('✅ User role is already correct (buyer/seller)');
+      console.log('✅ User role is already correct (company_products/seller_products)');
       console.log('   No changes needed.\n');
     }
     
@@ -97,9 +97,9 @@ async function fixUserRoleAndScope() {
     console.log(`   Status: ${finalUser.status}\n`);
     
     console.log('✅ SOLUTION:');
-    console.log('   1. User role is now: buyer');
+    console.log('   1. User role is now: company_products');
     console.log('   2. When user logs in via verifyOTP, token will have:');
-    console.log('      - Role: buyer');
+    console.log('      - Role: company_products');
     console.log('      - Scope: mobile ✅');
     console.log('   3. Flutter app will accept this token');
     console.log('   4. 403 error will be fixed\n');

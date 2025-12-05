@@ -78,7 +78,7 @@ async function checkAndFixLoginNumber() {
       const buyerEmail = `buyer9647700914000@bidmaster.com`;
       const insertResult = await pool.query(
         `INSERT INTO users (name, email, phone, role, status, created_at)
-         VALUES ($1, $2, $3, 'buyer', 'approved', CURRENT_TIMESTAMP)
+         VALUES ($1, $2, $3, 'company_products', 'approved', CURRENT_TIMESTAMP)
          ON CONFLICT (phone) DO UPDATE SET
            status = 'approved',
            updated_at = CURRENT_TIMESTAMP

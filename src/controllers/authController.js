@@ -649,7 +649,7 @@ export const AuthController = {
       }
       
       // Fetch user from database to get role
-      // If user doesn't exist, auto-create a buyer user (similar to admin-login creating viewer)
+      // If user doesn't exist, auto-create a company_products user (similar to admin-login creating viewer)
       console.log('🔍 [VERIFY OTP] Checking database for user:', normalizedPhone);
       
       let user;
@@ -665,9 +665,9 @@ export const AuthController = {
         });
         
         if (userResult.rows.length === 0) {
-          // Auto-create buyer user if doesn't exist (mobile app users are typically buyers)
-          console.log('🔍 [VERIFY OTP] User not found, creating new buyer user');
-          const buyerEmail = `buyer${normalizedPhone.replace(/\+/g, '')}@bidmaster.com`;
+          // Auto-create company_products user if doesn't exist (mobile app users are typically company_products)
+          console.log('🔍 [VERIFY OTP] User not found, creating new company_products user');
+          const userEmail = `company_products${normalizedPhone.replace(/\+/g, '')}@bidmaster.com`;
           
           // ============================================================
           // REFERRAL SYSTEM: Handle referral code
@@ -732,13 +732,13 @@ export const AuthController = {
             // Try INSERT first (if phone has unique constraint)
             const insertResult = await pool.query(
               `INSERT INTO users (name, email, phone, role, status, referral_code, referred_by, created_at)
-               VALUES ($1, $2, $3, 'buyer', 'approved', $4, $5, CURRENT_TIMESTAMP)
+               VALUES ($1, $2, $3, 'company_products', 'approved', $4, $5, CURRENT_TIMESTAMP)
                RETURNING id, name, email, phone, role, status, referral_code, referred_by`,
-              [`Buyer ${normalizedPhone}`, buyerEmail, normalizedPhone, referralCode, referredBy]
+              [`Company Products ${normalizedPhone}`, userEmail, normalizedPhone, referralCode, referredBy]
             );
             
             user = insertResult.rows[0];
-            console.log(`✅ Buyer user auto-created via verifyOTP: ${normalizedPhone}`);
+            console.log(`✅ Company Products user auto-created via verifyOTP: ${normalizedPhone}`);
             
             // ============================================================
             // REFERRAL SYSTEM: Award reward if referral transaction exists
@@ -915,7 +915,7 @@ export const AuthController = {
   // POST /api/auth/register
   async register(req, res) {
     try {
-      const { name, phone, email, password, role = 'buyer' } = req.body;
+      const { name, phone, email, password, role = 'company_products' } = req.body;
 
       if (!name || !phone || !password) {
         return res.status(400).json({ 
@@ -925,10 +925,10 @@ export const AuthController = {
       }
 
       // Validate role
-      if (!['buyer', 'seller'].includes(role)) {
+      if (!['company_products', 'seller_products'].includes(role)) {
         return res.status(400).json({ 
           success: false, 
-          message: "Role must be 'buyer' or 'seller'" 
+          message: "Role must be 'company_products' or 'seller_products'" 
         });
       }
 
@@ -1185,11 +1185,11 @@ export const AuthController = {
 
       if (role) {
         const normalizedRole = role.toLowerCase().trim();
-        // Only allow buyer/seller roles to be set by users themselves
-        if (normalizedRole !== 'buyer' && normalizedRole !== 'seller') {
+        // Only allow company_products/seller_products roles to be set by users themselves
+        if (normalizedRole !== 'company_products' && normalizedRole !== 'seller_products') {
           return res.status(400).json({ 
             success: false, 
-            message: "Role must be 'buyer' or 'seller'" 
+            message: "Role must be 'company_products' or 'seller_products'" 
           });
         }
         
@@ -1539,7 +1539,7 @@ export const AuthController = {
       const tokenPayload = {
         id: updatedUser.id,
         phone: updatedUser.phone,
-        role: updatedUser.role?.toLowerCase() || 'buyer',
+        role: updatedUser.role?.toLowerCase() || 'company_products',
         scope: req.user.scope || 'mobile'
       };
       

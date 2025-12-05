@@ -83,7 +83,7 @@ async function performHealthCheck() {
 
     // STEP 1: Login as Seller
     log('\n📋 STEP 1: Login as Seller', 'cyan');
-    const seller = await getUserByRole('seller');
+    const seller = await getUserByRole('seller_products');
     log(`   Seller: ${seller.name} (ID: ${seller.id}, Phone: ${seller.phone})`, 'blue');
 
     // Send OTP
@@ -170,7 +170,7 @@ async function performHealthCheck() {
     const expiredTokenPayload = {
       id: seller.id,
       phone: seller.phone,
-      role: 'seller'
+      role: 'seller_products'
     };
     const expiredToken = jwt.sign(expiredTokenPayload, JWT_SECRET, { expiresIn: '-1h' });
 

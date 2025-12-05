@@ -30,7 +30,7 @@ async function seedSampleProducts() {
 
     // Get or create a seller user
     let sellerResult = await pool.query(
-      "SELECT id FROM users WHERE role = 'seller' AND status = 'approved' LIMIT 1"
+      "SELECT id FROM users WHERE role = 'seller_products' AND status = 'approved' LIMIT 1"
     );
 
     let sellerId;
@@ -45,7 +45,7 @@ async function seedSampleProducts() {
           'Sample Seller',
           'seller@bidmaster.com',
           '+9647701234999',
-          'seller',
+          'seller_products',
           'approved',
           '$2b$10$dummy' // Dummy password for testing
         ]
