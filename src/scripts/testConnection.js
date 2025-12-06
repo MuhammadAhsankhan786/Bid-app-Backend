@@ -59,7 +59,7 @@ async function testConnection() {
           
           console.log('\n4️⃣ Flutter App Configuration:');
           console.log('   Base URL (Web): http://localhost:5000/api');
-          console.log('   Base URL (Mobile): https://bidmaster-api.onrender.com/api');
+          console.log('   Base URL (Mobile): https://api.mazaadati.com/api');
           console.log('   Platform Detection: Automatic (kIsWeb)');
           
           console.log('\n✅ Connection Test Complete!');

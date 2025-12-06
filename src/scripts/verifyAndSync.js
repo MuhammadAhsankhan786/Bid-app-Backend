@@ -394,16 +394,16 @@ function checkFrontendConfigs() {
     const flutterApiContent = fs.readFileSync(flutterApiPath, "utf8");
     // Check for localhost (development) or production URL
     const localhostMatch = flutterApiContent.match(/localhost:\d+/);
-    const prodMatch = flutterApiContent.match(/bidmaster-api\.onrender\.com/);
+    const prodMatch = flutterApiContent.match(/api\.mazaadati\.com/);
     
     if (localhostMatch) {
       frontendResults.flutterApp.baseUrl = `http://${localhostMatch[0]}/api`;
       frontendResults.flutterApp.status = "found_local";
       console.log(`✅ Flutter App API URL (dev): http://${localhostMatch[0]}/api`);
     } else if (prodMatch) {
-      frontendResults.flutterApp.baseUrl = "https://bidmaster-api.onrender.com/api";
+      frontendResults.flutterApp.baseUrl = "https://api.mazaadati.com/api";
       frontendResults.flutterApp.status = "found_prod";
-      console.log(`✅ Flutter App API URL (prod): https://bidmaster-api.onrender.com/api`);
+      console.log(`✅ Flutter App API URL (prod): https://api.mazaadati.com/api`);
     } else {
       frontendResults.flutterApp.status = "not_found";
       console.log("⚠️  Flutter App API URL not found");

@@ -254,21 +254,21 @@ async function runDiagnostic() {
     const serverJsContent = fs.readFileSync(serverJsPath, "utf-8");
     const hasCorsConfig = serverJsContent.includes("corsOptions");
     const allowsLocalhost = serverJsContent.includes("localhost") || serverJsContent.includes("127.0.0.1");
-    const allowsRender = serverJsContent.includes("bidmaster-api.onrender.com");
+    const allowsProduction = serverJsContent.includes("api.mazaadati.com");
 
     console.log(`✅ CORS configuration found: ${hasCorsConfig ? "✅" : "❌"}`);
     console.log(`✅ Allows localhost: ${allowsLocalhost ? "✅" : "❌"}`);
-    console.log(`✅ Allows Render.com: ${allowsRender ? "✅" : "❌"}`);
+    console.log(`✅ Allows Production (api.mazaadati.com): ${allowsProduction ? "✅" : "❌"}`);
 
     report.backend.cors = {
       configured: hasCorsConfig,
       allowsLocalhost: allowsLocalhost,
-      allowsRender: allowsRender,
+      allowsProduction: allowsProduction,
     };
 
-    if (!hasCorsConfig || !allowsLocalhost || !allowsRender) {
+    if (!hasCorsConfig || !allowsLocalhost || !allowsProduction) {
       report.issues.push("CORS configuration incomplete");
-      report.fixes.push("Update server.js CORS options to allow localhost and Render.com");
+      report.fixes.push("Update server.js CORS options to allow localhost and api.mazaadati.com");
     }
   } catch (error) {
     console.log(`⚠️  Could not read server.js: ${error.message}`);
@@ -348,7 +348,7 @@ CORS CONFIGURATION
 ${"=".repeat(60)}
 CORS Configured: ${report.backend.cors?.configured ? "✅ Yes" : "❌ No"}
 Allows localhost: ${report.backend.cors?.allowsLocalhost ? "✅ Yes" : "❌ No"}
-Allows Render.com: ${report.backend.cors?.allowsRender ? "✅ Yes" : "❌ No"}
+Allows Production (api.mazaadati.com): ${report.backend.cors?.allowsProduction ? "✅ Yes" : "❌ No"}
 
 ${"=".repeat(60)}
 ISSUES

@@ -225,9 +225,9 @@ async function verifyIntegration() {
     console.log('\n📱 STEP 3: Frontend Integration Verification');
     console.log('-'.repeat(60));
     
-    const frontendBaseUrl = 'https://bidmaster-api.onrender.com/api';
+    const frontendBaseUrl = 'https://api.mazaadati.com/api';
     console.log(`\n✅ Frontend Base URL: ${frontendBaseUrl}`);
-    console.log(`   Matches Backend: ${frontendBaseUrl.includes('bidmaster-api.onrender.com') ? 'YES ✓' : 'NO ✗'}`);
+    console.log(`   Matches Backend: ${frontendBaseUrl.includes('api.mazaadati.com') ? 'YES ✓' : 'NO ✗'}`);
     
     const frontendEndpoints = {
       'Products': '/products',
@@ -300,7 +300,7 @@ async function verifyIntegration() {
     console.log(`✅ CORS Configuration: Enabled for localhost and all origins`);
     
     console.log('\n📊 PRIMARY ENDPOINT FOR PRODUCTS:');
-    console.log('   GET https://bidmaster-api.onrender.com/api/products');
+    console.log('   GET https://api.mazaadati.com/api/products');
     console.log('   Status: ✅ CONFIGURED');
     console.log('   Returns: { success: true, data: [...products], pagination: {...} }');
     console.log(`   current_bid Field: ${currentBidExists ? '✅ INCLUDED' : '❌ MISSING'}`);

@@ -102,7 +102,11 @@ router.post('/image', verifyUser, upload.single('image'), async (req, res) => {
       }
     } else {
       // Fallback to local storage
-      const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+      // Use production URL if BASE_URL is set, otherwise use localhost
+      const baseUrl = process.env.BASE_URL || 
+                      (process.env.NODE_ENV === 'production' 
+                        ? 'https://api.mazaadati.com' 
+                        : `http://localhost:${process.env.PORT || 5000}`);
       imageUrl = `${baseUrl}/uploads/products/${req.file.filename}`;
 
       console.log('✅ [UploadImage] Image saved locally:', {
@@ -171,7 +175,11 @@ router.post('/images', verifyUser, upload.array('images', 5), async (req, res) =
       });
     } else {
       // Fallback to local storage
-      const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+      // Use production URL if BASE_URL is set, otherwise use localhost
+      const baseUrl = process.env.BASE_URL || 
+                      (process.env.NODE_ENV === 'production' 
+                        ? 'https://api.mazaadati.com' 
+                        : `http://localhost:${process.env.PORT || 5000}`);
       for (const file of req.files) {
         uploadedImages.push({
           filename: file.filename,

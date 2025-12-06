@@ -39,6 +39,7 @@
     "fix:twilio": "node src/scripts/fixTwilioService.js",
     "test:network": "node src/scripts/testNetworkConnectivity.js",
     "verify:phone": "node src/scripts/verifyPhoneNumber.js",
+    "fix:role-constraint": "node fix_role_constraint.js",
     "stop": "kill-port 5000 || true",
     "restart": "npm run stop && npm run dev"
   },

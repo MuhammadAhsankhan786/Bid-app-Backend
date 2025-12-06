@@ -46,8 +46,8 @@ async function checkBackendAPI() {
   const urls = [
     { url: "http://localhost:5000/", label: "Local" },
     { url: "http://localhost:5000/api/products", label: "Local API" },
-    { url: "https://bidmaster-api.onrender.com/", label: "Production" },
-    { url: "https://bidmaster-api.onrender.com/api/products", label: "Production API" },
+    { url: "https://api.mazaadati.com/", label: "Production" },
+    { url: "https://api.mazaadati.com/api/products", label: "Production API" },
   ];
 
   for (const { url, label } of urls) {
@@ -89,7 +89,7 @@ async function checkFlutterIntegration() {
   // Try both local and production
   const urls = [
     "http://localhost:5000/api/products",
-    "https://bidmaster-api.onrender.com/api/products",
+    "https://api.mazaadati.com/api/products",
   ];
 
   for (const url of urls) {
@@ -124,7 +124,7 @@ async function checkAdminFrontend() {
   // Check admin dashboard endpoint
   const urls = [
     "http://localhost:5000/api/admin/dashboard",
-    "https://bidmaster-api.onrender.com/api/admin/dashboard",
+    "https://api.mazaadati.com/api/admin/dashboard",
   ];
 
   for (const url of urls) {

@@ -11,7 +11,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BASE_URL = process.env.BASE_URL || process.env.PRODUCTION_URL || "https://bidmaster-api.onrender.com/api";
+const BASE_URL = process.env.BASE_URL || process.env.PRODUCTION_URL || "https://api.mazaadati.com/api";
 const JWT_SECRET = process.env.JWT_SECRET;
 const MONITOR_INTERVAL = 10 * 60 * 1000; // 10 minutes in milliseconds
 const REPORTS_DIR = path.join(__dirname, '../logs/monitoring');
