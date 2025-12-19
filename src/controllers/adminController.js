@@ -464,20 +464,49 @@ export const AdminController = {
       const { role } = req.body;
 
       if (!role || !['company_products', 'seller_products', 'admin', 'superadmin', 'moderator', 'viewer', 'employee'].includes(role)) {
-        return res.status(400).json({ error: "Valid role (company_products, seller_products, admin, employee) is required" });
+        return res.status(400).json({ 
+          error: "Valid role is required",
+          validRoles: ['company_products', 'seller_products', 'admin', 'superadmin', 'moderator', 'viewer', 'employee']
+        });
       }
+      
+      console.log(`🔄 [updateUserRole] Attempting to change user ${id} role to ${role}`);
 
+      // First check if user exists and get current role
+      const userCheck = await pool.query(
+        `SELECT id, role FROM users WHERE id = $1`,
+        [id]
+      );
+      
+      if (userCheck.rows.length === 0) {
+        console.log(`❌ [updateUserRole] User ${id} not found`);
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      const currentRole = userCheck.rows[0].role;
+      console.log(`📋 [updateUserRole] User ${id} current role: ${currentRole}`);
+      
+      // Check if user is admin (cannot change admin role)
+      if (currentRole === 'admin') {
+        console.log(`⚠️ [updateUserRole] Cannot change admin user role`);
+        return res.status(403).json({ error: "Cannot change admin user role" });
+      }
+      
+      // Perform update
       const result = await pool.query(
         `UPDATE users 
          SET role = $1 
-         WHERE id = $2 AND role != 'admin'
+         WHERE id = $2
          RETURNING id, name, email, role, status`,
         [role, id]
       );
 
       if (result.rowCount === 0) {
+        console.log(`❌ [updateUserRole] Update query returned 0 rows for user ${id}`);
         return res.status(404).json({ error: "User not found or cannot be updated" });
       }
+      
+      console.log(`✅ [updateUserRole] User ${id} role updated from ${currentRole} to ${role}`);
 
       // Log admin action (only if table exists)
       try {
@@ -504,7 +533,17 @@ export const AdminController = {
       res.json({ message: "User role updated successfully", user: result.rows[0] });
     } catch (error) {
       console.error("Error updating user role:", error);
-      res.status(500).json({ error: "Failed to update user role", details: error.message });
+      console.error("Error stack:", error.stack);
+      console.error("Error details:", {
+        message: error.message,
+        code: error.code,
+        detail: error.detail,
+        constraint: error.constraint
+      });
+      res.status(500).json({ 
+        error: "Failed to update user role", 
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 };
