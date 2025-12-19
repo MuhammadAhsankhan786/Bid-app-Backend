@@ -60,6 +60,55 @@ export const MobileOrderController = {
         });
       }
 
+      // ============================================================
+      // REFERRAL REWARD USAGE RESTRICTION
+      // Rewards can ONLY be used for company products (not seller products)
+      // ============================================================
+      const { useReward } = req.body;
+      if (useReward) {
+        // Check if product is a seller product (has seller_id)
+        if (product.seller_id) {
+          return res.status(400).json({
+            success: false,
+            message: "Referral rewards can only be used for company products, not seller products"
+          });
+        }
+
+        // Verify user has sufficient reward balance
+        const userResult = await pool.query(
+          "SELECT reward_balance FROM users WHERE id = $1",
+          [buyerId]
+        );
+
+        if (userResult.rows.length === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "User not found"
+          });
+        }
+
+        const rewardBalance = parseFloat(userResult.rows[0].reward_balance) || 0;
+        const orderAmount = parseFloat(product.current_bid || product.starting_price);
+
+        if (rewardBalance < orderAmount) {
+          return res.status(400).json({
+            success: false,
+            message: `Insufficient reward balance. You have $${rewardBalance.toFixed(2)}, but order amount is $${orderAmount.toFixed(2)}`
+          });
+        }
+
+        // Deduct reward balance
+        await pool.query(
+          `UPDATE users 
+           SET reward_balance = reward_balance - $1,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2`,
+          [orderAmount, buyerId]
+        );
+
+        console.log(`💰 [REWARD USAGE] Deducted $${orderAmount} from user ${buyerId} reward balance`);
+      }
+
       // Check if order already exists
       const existingOrder = await pool.query(
         "SELECT id FROM orders WHERE product_id = $1 AND buyer_id = $2",

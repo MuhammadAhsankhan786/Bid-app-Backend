@@ -91,17 +91,23 @@ export const MobileProductController = {
         });
       }
 
-      // Calculate auction end time (duration in days, default 7 days)
-      const days = duration || 7;
-      const auctionEndTime = new Date();
-      auctionEndTime.setDate(auctionEndTime.getDate() + days);
+      // Validate duration: must be 1, 2, or 3 days only
+      const days = duration || 1;
+      if (![1, 2, 3].includes(days)) {
+        return res.status(400).json({
+          success: false,
+          message: "Duration must be 1, 2, or 3 days only"
+        });
+      }
 
+      // For pending products, auction_end_time will be set to NULL
+      // It will be calculated when approved: approved_at + duration
       // Insert product with images as JSONB array
       const result = await pool.query(
         `INSERT INTO products 
          (seller_id, title, description, images, image_url, starting_price, starting_bid, 
-          current_price, current_bid, status, auction_end_time, category_id, created_at, updated_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, $6, $6, $6, 'pending', $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
+          current_price, current_bid, status, auction_end_time, duration, product_type, category_id, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $6, $6, $6, 'pending', NULL, $7, 'seller_product', $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
          RETURNING *`,
         [
           sellerId, 
@@ -110,7 +116,7 @@ export const MobileProductController = {
           JSON.stringify(imagesArray), // images as JSONB
           imagesArray[0] || null, // image_url for backward compatibility
           startingPrice, 
-          auctionEndTime, 
+          days, // duration: 1, 2, or 3
           category_id // Required - already validated above
         ]
       );

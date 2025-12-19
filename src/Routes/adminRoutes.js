@@ -47,26 +47,26 @@ router.get("/dashboard/charts", authorizeRoles("superadmin", "moderator", "viewe
 router.get("/dashboard/categories", authorizeRoles("superadmin", "moderator", "viewer"), DashboardController.getCategoryData);
 
 // --- PRODUCTS ---
-// GET /products - superadmin, moderator, viewer
-router.get("/products", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getProducts);
-// GET /products/pending - superadmin, moderator, viewer
-router.get("/products/pending", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getPendingProducts);
-// GET /products/live - superadmin, moderator, viewer
-router.get("/products/live", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getLiveAuctions);
-// GET /products/rejected - superadmin, moderator, viewer
-router.get("/products/rejected", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getRejectedProducts);
-// GET /products/completed - superadmin, moderator, viewer
-router.get("/products/completed", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getCompletedProducts);
-// GET /products/:id - superadmin, moderator, viewer
-router.get("/products/:id", authorizeRoles("superadmin", "moderator", "viewer"), ProductController.getProductById);
-// PATCH /products/approve/:id - superadmin, moderator (can approve)
-router.patch("/products/approve/:id", authorizeRoles("superadmin", "moderator"), ProductController.approveProduct);
-// PATCH /products/reject/:id - superadmin, moderator (can reject)
-router.patch("/products/reject/:id", authorizeRoles("superadmin", "moderator"), ProductController.rejectProduct);
-// PUT /products/:id - superadmin only (edit product)
-router.put("/products/:id", authorizeRoles("superadmin"), ProductController.updateProduct);
-// DELETE /products/:id - superadmin only (delete product)
-router.delete("/products/:id", authorizeRoles("superadmin"), ProductController.deleteProduct);
+// GET /products - superadmin, moderator, viewer, employee (employee sees only company products)
+router.get("/products", authorizeRoles("superadmin", "moderator", "viewer", "employee"), ProductController.getProducts);
+// GET /products/pending - superadmin, moderator, viewer, employee (employee sees only company products)
+router.get("/products/pending", authorizeRoles("superadmin", "moderator", "viewer", "employee"), ProductController.getPendingProducts);
+// GET /products/live - superadmin, moderator, viewer, employee (employee sees only company products)
+router.get("/products/live", authorizeRoles("superadmin", "moderator", "viewer", "employee"), ProductController.getLiveAuctions);
+// GET /products/rejected - superadmin, moderator, viewer, employee (employee sees only company products)
+router.get("/products/rejected", authorizeRoles("superadmin", "moderator", "viewer", "employee"), ProductController.getRejectedProducts);
+// GET /products/completed - superadmin, moderator, viewer, employee (employee sees only company products)
+router.get("/products/completed", authorizeRoles("superadmin", "moderator", "viewer", "employee"), ProductController.getCompletedProducts);
+// GET /products/:id - superadmin, moderator, viewer, employee (employee sees only company products)
+router.get("/products/:id", authorizeRoles("superadmin", "moderator", "viewer", "employee"), ProductController.getProductById);
+// PATCH /products/approve/:id - superadmin, moderator, employee (can approve company products only)
+router.patch("/products/approve/:id", authorizeRoles("superadmin", "moderator", "employee"), ProductController.approveProduct);
+// PATCH /products/reject/:id - superadmin, moderator, employee (can reject company products only)
+router.patch("/products/reject/:id", authorizeRoles("superadmin", "moderator", "employee"), ProductController.rejectProduct);
+// PUT /products/:id - superadmin, employee (edit product - employee can only edit company products)
+router.put("/products/:id", authorizeRoles("superadmin", "employee"), ProductController.updateProduct);
+// DELETE /products/:id - superadmin, employee (delete product - employee can only delete company products)
+router.delete("/products/:id", authorizeRoles("superadmin", "employee"), ProductController.deleteProduct);
 
 // --- ORDERS ---
 // GET /orders - superadmin, moderator

@@ -68,8 +68,8 @@ export const verifyAdmin = async (req, res, next) => {
         }
       } else {
         const user = userResult.rows[0];
-        // Allow superadmin, moderator, viewer roles (map legacy 'admin' to 'superadmin')
-        const allowedRoles = ['admin', 'superadmin', 'moderator', 'viewer'];
+        // Allow superadmin, moderator, viewer, employee roles (map legacy 'admin' to 'superadmin')
+        const allowedRoles = ['admin', 'superadmin', 'moderator', 'viewer', 'employee'];
         const userRole = user.role?.toLowerCase();
         if (!allowedRoles.includes(userRole)) {
           return res.status(403).json({ message: "Forbidden - Admin access required" });
@@ -80,8 +80,8 @@ export const verifyAdmin = async (req, res, next) => {
       }
     } else if (decoded.role) {
       // Email-based authentication
-      // Allow superadmin, moderator, viewer roles (map legacy 'admin' to 'superadmin')
-      const allowedRoles = ['admin', 'superadmin', 'moderator', 'viewer'];
+      // Allow superadmin, moderator, viewer, employee roles (map legacy 'admin' to 'superadmin')
+      const allowedRoles = ['admin', 'superadmin', 'moderator', 'viewer', 'employee'];
       const userRole = decoded.role?.toLowerCase();
       if (!allowedRoles.includes(userRole)) {
         return res.status(403).json({ message: "Forbidden - Admin access required" });

@@ -10,8 +10,8 @@ export const AdminController = {
     const { email, password } = req.body;
     const user = await UserModel.findByEmail(email);
 
-    // Check if user exists and has admin role (superadmin, moderator, viewer, or legacy admin)
-    const allowedRoles = ['admin', 'superadmin', 'moderator', 'viewer'];
+    // Check if user exists and has admin role (superadmin, moderator, viewer, employee, or legacy admin)
+    const allowedRoles = ['admin', 'superadmin', 'moderator', 'viewer', 'employee'];
     const userRole = user?.role?.toLowerCase();
     
     if (!user || !allowedRoles.includes(userRole)) {
@@ -150,7 +150,7 @@ export const AdminController = {
       const user = userCheck.rows[0];
       
       // Check if user is admin (exclude admin users)
-      const adminRoles = ['admin', 'superadmin', 'moderator', 'viewer'];
+      const adminRoles = ['admin', 'superadmin', 'moderator', 'viewer', 'employee'];
       if (adminRoles.includes(user.role?.toLowerCase())) {
         console.log(`⚠️ [getUserById] Attempted to fetch admin user: ${id}`);
         return res.status(403).json({ 
@@ -463,8 +463,8 @@ export const AdminController = {
       const { id } = req.params;
       const { role } = req.body;
 
-      if (!role || !['company_products', 'seller_products', 'admin', 'superadmin', 'moderator', 'viewer'].includes(role)) {
-        return res.status(400).json({ error: "Valid role (company_products, seller_products, admin) is required" });
+      if (!role || !['company_products', 'seller_products', 'admin', 'superadmin', 'moderator', 'viewer', 'employee'].includes(role)) {
+        return res.status(400).json({ error: "Valid role (company_products, seller_products, admin, employee) is required" });
       }
 
       const result = await pool.query(
@@ -479,17 +479,32 @@ export const AdminController = {
         return res.status(404).json({ error: "User not found or cannot be updated" });
       }
 
-      // Log admin action
-      await pool.query(
-        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id, details)
-         VALUES ($1, 'User role updated', 'user', $2, $3)`,
-        [req.user.id, id, JSON.stringify({ new_role: role })]
-      );
+      // Log admin action (only if table exists)
+      try {
+        const tableCheck = await pool.query(
+          `SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'admin_activity_log'
+          )`
+        );
+        
+        if (tableCheck.rows[0].exists) {
+          await pool.query(
+            `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id, details)
+             VALUES ($1, 'User role updated', 'user', $2, $3)`,
+            [req.user.id, id, JSON.stringify({ new_role: role })]
+          );
+        }
+      } catch (logError) {
+        // Don't fail the request if logging fails
+        console.warn("Failed to log admin activity:", logError.message);
+      }
 
       res.json({ message: "User role updated successfully", user: result.rows[0] });
     } catch (error) {
       console.error("Error updating user role:", error);
-      res.status(500).json({ error: "Failed to update user role" });
+      res.status(500).json({ error: "Failed to update user role", details: error.message });
     }
   },
 };

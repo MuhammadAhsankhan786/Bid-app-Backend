@@ -109,10 +109,10 @@ export const AuthController = {
 
       // Validate role
       const normalizedRole = role.toLowerCase();
-      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer'];
+      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer', 'employee'];
       if (!adminRoles.includes(normalizedRole)) {
         return res.status(400).json({ 
-          success: false, 
+          success: false,
           message: `Invalid role. Must be one of: ${adminRoles.join(', ')}` 
         });
       }
@@ -420,7 +420,7 @@ export const AuthController = {
       let userRole = user.role?.toLowerCase();
       
       // Determine scope based on user role: admin roles get "admin" scope, others get "mobile"
-      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer'];
+      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer', 'employee'];
       const scope = adminRoles.includes(userRole) ? 'admin' : 'mobile';
 
       // Generate access and refresh tokens with appropriate scope
@@ -765,6 +765,33 @@ export const AuthController = {
                 // Don't fail user creation if award fails - log and continue
               }
             }
+            
+            // ============================================================
+            // REFERRAL SYSTEM: Award $2 reward to referral user (invitee)
+            // ============================================================
+            if (referredBy && user.id) {
+              try {
+                const referralUserRewardResult = await pool.query(
+                  `UPDATE users 
+                   SET reward_balance = reward_balance + 2.00,
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = $1
+                   RETURNING id, reward_balance`,
+                  [user.id]
+                );
+                
+                if (referralUserRewardResult.rows.length > 0) {
+                  console.log(`💰 [REFERRAL USER REWARD] Successfully awarded $2 to referral user:`);
+                  console.log(`   Referral User ID: ${user.id}`);
+                  console.log(`   Referral User Phone: ${normalizedPhone}`);
+                  console.log(`   Reward Amount: $2.00`);
+                  console.log(`   New Reward Balance: $${referralUserRewardResult.rows[0].reward_balance}`);
+                }
+              } catch (referralUserRewardError) {
+                console.error(`❌ Error awarding referral user reward:`, referralUserRewardError);
+                // Don't fail user creation if reward fails - log and continue
+              }
+            }
           } catch (insertError) {
             // If unique constraint violation, try to fetch existing user
             if (insertError.code === '23505') { // Unique violation
@@ -812,7 +839,7 @@ export const AuthController = {
       const scope = 'mobile';
       
       // Log warning if admin role user is using Flutter app login
-      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer'];
+      const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer', 'employee'];
       if (adminRoles.includes(userRole)) {
         console.log(`⚠️ Warning: Admin role user (${userRole}) using Flutter app login via verifyOTP.`);
         console.log(`   They should use admin-login endpoint, but allowing with mobile scope for compatibility.`);
@@ -915,9 +942,24 @@ export const AuthController = {
   // POST /api/auth/register
   async register(req, res) {
     try {
+      console.log('📝 Register Request:', {
+        body: req.body,
+        name: req.body?.name,
+        phone: req.body?.phone,
+        email: req.body?.email,
+        role: req.body?.role,
+        hasPassword: !!req.body?.password,
+      });
+
       const { name, phone, email, password, role = 'company_products' } = req.body;
 
+      // Validate required fields
       if (!name || !phone || !password) {
+        console.log('❌ Missing required fields:', {
+          hasName: !!name,
+          hasPhone: !!phone,
+          hasPassword: !!password,
+        });
         return res.status(400).json({ 
           success: false, 
           message: "Name, phone, and password are required" 
@@ -926,6 +968,7 @@ export const AuthController = {
 
       // Validate role
       if (!['company_products', 'seller_products'].includes(role)) {
+        console.log('❌ Invalid role:', role);
         return res.status(400).json({ 
           success: false, 
           message: "Role must be 'company_products' or 'seller_products'" 
@@ -934,18 +977,56 @@ export const AuthController = {
 
       // Normalize and validate phone
       const normalizedPhone = normalizeIraqPhone(phone);
-      if (!isValidIraqPhone(phone)) {
+      console.log('📱 Phone normalization:', {
+        original: phone,
+        normalized: normalizedPhone,
+      });
+
+      if (!normalizedPhone) {
+        console.log('❌ Phone normalization failed:', phone);
         return res.status(400).json({ 
           success: false, 
-          message: "Only Iraq numbers allowed" 
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
         });
       }
 
+      if (!isValidIraqPhone(phone)) {
+        console.log('❌ Phone validation failed:', {
+          original: phone,
+          normalized: normalizedPhone,
+        });
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        });
+      }
+
+      // Generate email if not provided (required by database)
+      const userEmail = email || `user_${normalizedPhone.replace(/\+/g, '').replace(/\s/g, '')}@bidmaster.com`;
+      
       // Check if user already exists
-      const existingUser = await pool.query(
-        "SELECT id FROM users WHERE phone = $1 OR email = $2",
-        [normalizedPhone, email || null]
-      );
+      console.log('📝 Checking if user already exists:', {
+        phone: normalizedPhone,
+        email: userEmail
+      });
+      
+      let existingUser;
+      try {
+        existingUser = await pool.query(
+          "SELECT id FROM users WHERE phone = $1 OR email = $2",
+          [normalizedPhone, userEmail]
+        );
+        console.log('✅ User existence check completed:', {
+          found: existingUser.rows.length > 0,
+          count: existingUser.rows.length
+        });
+      } catch (dbError) {
+        console.error('❌ Database SELECT error (checking existing user):', {
+          message: dbError.message,
+          code: dbError.code
+        });
+        throw dbError;
+      }
 
       if (existingUser.rows.length > 0) {
         return res.status(400).json({ 
@@ -958,12 +1039,36 @@ export const AuthController = {
       const hashedPassword = await bcrypt.hash(password, 10);
 
       // Create user
-      const result = await pool.query(
-        `INSERT INTO users (name, email, phone, password, role, status) 
-         VALUES ($1, $2, $3, $4, $5, 'pending') 
-         RETURNING id, name, email, phone, role, status, created_at`,
-        [name, email || null, normalizedPhone, hashedPassword, role]
-      );
+      console.log('📝 Attempting to insert user into database:', {
+        name,
+        email: userEmail,
+        phone: normalizedPhone,
+        role,
+        hasPassword: !!hashedPassword,
+        passwordLength: hashedPassword?.length
+      });
+      
+      let result;
+      try {
+        result = await pool.query(
+          `INSERT INTO users (name, email, phone, password, role, status) 
+           VALUES ($1, $2, $3, $4, $5, 'pending') 
+           RETURNING id, name, email, phone, role, status, created_at`,
+          [name, userEmail, normalizedPhone, hashedPassword, role]
+        );
+        console.log('✅ User inserted successfully into database');
+        console.log('   User ID:', result.rows[0]?.id);
+      } catch (dbError) {
+        console.error('❌ Database INSERT error:', {
+          message: dbError.message,
+          code: dbError.code,
+          detail: dbError.detail,
+          constraint: dbError.constraint,
+          table: dbError.table,
+          column: dbError.column
+        });
+        throw dbError; // Re-throw to be caught by outer catch
+      }
 
       const user = result.rows[0];
 
@@ -977,10 +1082,27 @@ export const AuthController = {
       const refreshToken = generateRefreshToken(tokenPayload);
 
       // Save refresh token to database
-      await pool.query(
-        "UPDATE users SET refresh_token = $1 WHERE id = $2",
-        [refreshToken, user.id]
-      );
+      console.log('📝 Saving refresh token to database for user:', user.id);
+      try {
+        await pool.query(
+          "UPDATE users SET refresh_token = $1 WHERE id = $2",
+          [refreshToken, user.id]
+        );
+        console.log('✅ Refresh token saved successfully');
+      } catch (dbError) {
+        console.error('❌ Database UPDATE error (saving refresh token):', {
+          message: dbError.message,
+          code: dbError.code
+        });
+        // Don't throw - registration succeeded, just token save failed
+        // User can still login and get new token
+      }
+
+      console.log('✅ User registered successfully:', {
+        userId: user.id,
+        phone: user.phone,
+        role: user.role,
+      });
 
       res.status(201).json({
         success: true,
@@ -998,11 +1120,100 @@ export const AuthController = {
         }
       });
     } catch (error) {
-      console.error("Error registering user:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Internal server error" 
-      });
+      // Print full error details for debugging
+      console.error("=".repeat(60));
+      console.error("❌ ERROR REGISTERING USER:");
+      console.error("=".repeat(60));
+      console.error("   Error Message:", error.message);
+      console.error("   Error Code:", error.code);
+      console.error("   Error Detail:", error.detail);
+      console.error("   Error Constraint:", error.constraint);
+      console.error("   Error Table:", error.table);
+      console.error("   Error Column:", error.column);
+      console.error("   Full Error Object:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      console.error("   Stack Trace:", error.stack);
+      console.error("=".repeat(60));
+      
+      // Handle specific database errors
+      if (error.code === '23505') { // Unique constraint violation
+        const constraint = error.constraint || 'unknown';
+        let message = "User with this phone or email already exists";
+        
+        if (constraint.includes('phone')) {
+          message = "Phone number already registered";
+        } else if (constraint.includes('email')) {
+          message = "Email already registered";
+        }
+        
+        return res.status(400).json({ 
+          success: false, 
+          message: message,
+          error: {
+            code: error.code,
+            constraint: constraint,
+            detail: error.detail
+          }
+        });
+      }
+      
+      if (error.code === '23502') { // Not null constraint violation
+        return res.status(400).json({ 
+          success: false, 
+          message: `Missing required field: ${error.column || 'unknown'}`,
+          error: {
+            code: error.code,
+            column: error.column,
+            table: error.table
+          }
+        });
+      }
+
+      if (error.code === '23514') { // Check constraint violation
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid value for field: ${error.column || 'unknown'}. ${error.message}`,
+          error: {
+            code: error.code,
+            constraint: error.constraint,
+            detail: error.detail
+          }
+        });
+      }
+
+      // Database connection errors
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || 
+          error.message?.includes('connection') || error.message?.includes('ECONNREFUSED')) {
+        console.error('❌ Database connection error detected');
+        return res.status(500).json({
+          success: false,
+          message: "Database connection failed. Please try again later.",
+          error: {
+            code: error.code,
+            message: error.message
+          }
+        });
+      }
+      
+      // Return detailed error in development, generic in production
+      const errorResponse = {
+        success: false,
+        message: error.message || "Internal server error during registration"
+      };
+
+      // Add detailed error info in development
+      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production') {
+        errorResponse.error = {
+          message: error.message,
+          code: error.code,
+          detail: error.detail,
+          constraint: error.constraint,
+          table: error.table,
+          column: error.column,
+          stack: error.stack
+        };
+      }
+
+      res.status(500).json(errorResponse);
     }
   },
 
@@ -1185,16 +1396,25 @@ export const AuthController = {
 
       if (role) {
         const normalizedRole = role.toLowerCase().trim();
+        
+        // Map old role names to new ones (for backward compatibility)
+        let mappedRole = normalizedRole;
+        if (normalizedRole === 'buyer') {
+          mappedRole = 'company_products';
+        } else if (normalizedRole === 'seller') {
+          mappedRole = 'seller_products';
+        }
+        
         // Only allow company_products/seller_products roles to be set by users themselves
-        if (normalizedRole !== 'company_products' && normalizedRole !== 'seller_products') {
+        if (mappedRole !== 'company_products' && mappedRole !== 'seller_products') {
           return res.status(400).json({ 
             success: false, 
-            message: "Role must be 'company_products' or 'seller_products'" 
+            message: "Role must be 'company_products' or 'seller_products' (or 'buyer'/'seller' for backward compatibility)" 
           });
         }
         
         updates.push(`role = $${paramCount++}`);
-        params.push(normalizedRole);
+        params.push(mappedRole);
       }
 
       params.push(userId);

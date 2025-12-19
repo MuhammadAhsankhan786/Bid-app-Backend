@@ -1,10 +1,23 @@
 import pool from "../config/db.js";
 
 export const ProductController = {
+  // Helper function to get product type filter based on user role
+  _getProductTypeFilter(userRole) {
+    const normalizedRole = (userRole || '').toLowerCase();
+    // Employee can only see company products
+    if (normalizedRole === 'employee') {
+      return "p.product_type = 'company_product'";
+    }
+    // Super admin, moderator, viewer can see all products
+    // For now, return no filter (can see all)
+    return null;
+  },
+
   // Get all products with filters
   async getProducts(req, res) {
     try {
       const { status, category, search, page = 1, limit = 20 } = req.query;
+      const userRole = req.user?.role;
       
       let query = `
         SELECT 
@@ -21,6 +34,12 @@ export const ProductController = {
       `;
       const params = [];
       let paramCount = 1;
+
+      // Apply product type filter based on role
+      const productTypeFilter = this._getProductTypeFilter(userRole);
+      if (productTypeFilter) {
+        query += ` AND ${productTypeFilter}`;
+      }
 
       if (status) {
         query += ` AND p.status = $${paramCount++}`;
@@ -42,10 +61,33 @@ export const ProductController = {
       params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
 
       const result = await pool.query(query, params);
-      const countResult = await pool.query(`
-        SELECT COUNT(*) FROM products 
-        WHERE ${status ? `status = '${status}'` : '1=1'}
-      `);
+      
+      // Build count query with same filters
+      let countQuery = `SELECT COUNT(*) FROM products p WHERE 1=1`;
+      const countParams = [];
+      let countParamCount = 1;
+      
+      if (productTypeFilter) {
+        countQuery += ` AND ${productTypeFilter}`;
+      }
+      
+      if (status) {
+        countQuery += ` AND p.status = $${countParamCount++}`;
+        countParams.push(status);
+      }
+      
+      if (category) {
+        countQuery += ` AND p.category_id = $${countParamCount++}`;
+        countParams.push(category);
+      }
+      
+      if (search) {
+        countQuery += ` AND (p.title ILIKE $${countParamCount++} OR p.description ILIKE $${countParamCount})`;
+        countParams.push(`%${search}%`, `%${search}%`);
+        countParamCount++;
+      }
+      
+      const countResult = await pool.query(countQuery, countParams);
 
       res.json({
         products: result.rows,
@@ -65,7 +107,10 @@ export const ProductController = {
   // Get pending products
   async getPendingProducts(req, res) {
     try {
-      const result = await pool.query(`
+      const userRole = req.user?.role;
+      const productTypeFilter = this._getProductTypeFilter(userRole);
+      
+      let query = `
         SELECT 
           p.*,
           u.name as seller_name,
@@ -75,8 +120,15 @@ export const ProductController = {
         LEFT JOIN users u ON p.seller_id = u.id
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.status = 'pending'
-        ORDER BY p.created_at DESC
-      `);
+      `;
+      
+      if (productTypeFilter) {
+        query += ` AND ${productTypeFilter}`;
+      }
+      
+      query += ` ORDER BY p.created_at DESC`;
+
+      const result = await pool.query(query);
 
       res.json(result.rows);
     } catch (error) {
@@ -88,7 +140,10 @@ export const ProductController = {
   // Get live auctions
   async getLiveAuctions(req, res) {
     try {
-      const result = await pool.query(`
+      const userRole = req.user?.role;
+      const productTypeFilter = this._getProductTypeFilter(userRole);
+      
+      let query = `
         SELECT 
           p.*,
           u.name as seller_name,
@@ -102,8 +157,15 @@ export const ProductController = {
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.status = 'approved' 
           AND p.auction_end_time > NOW()
-        ORDER BY p.auction_end_time ASC
-      `);
+      `;
+      
+      if (productTypeFilter) {
+        query += ` AND ${productTypeFilter}`;
+      }
+      
+      query += ` ORDER BY p.auction_end_time ASC`;
+
+      const result = await pool.query(query);
 
       res.json(result.rows.map(product => ({
         ...product,
@@ -118,7 +180,10 @@ export const ProductController = {
   // Get rejected products
   async getRejectedProducts(req, res) {
     try {
-      const result = await pool.query(`
+      const userRole = req.user?.role;
+      const productTypeFilter = this._getProductTypeFilter(userRole);
+      
+      let query = `
         SELECT 
           p.*,
           u.name as seller_name,
@@ -128,8 +193,15 @@ export const ProductController = {
         LEFT JOIN users u ON p.seller_id = u.id
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.status = 'rejected'
-        ORDER BY p.updated_at DESC, p.created_at DESC
-      `);
+      `;
+      
+      if (productTypeFilter) {
+        query += ` AND ${productTypeFilter}`;
+      }
+      
+      query += ` ORDER BY p.updated_at DESC, p.created_at DESC`;
+
+      const result = await pool.query(query);
 
       res.json(result.rows);
     } catch (error) {
@@ -143,8 +215,10 @@ export const ProductController = {
     try {
       const { page = 1, limit = 20 } = req.query;
       const offset = (parseInt(page) - 1) * parseInt(limit);
+      const userRole = req.user?.role;
+      const productTypeFilter = this._getProductTypeFilter(userRole);
 
-      const result = await pool.query(`
+      let query = `
         SELECT 
           p.*,
           u.name as seller_name,
@@ -157,16 +231,28 @@ export const ProductController = {
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.status = 'approved' 
           AND p.auction_end_time <= NOW()
-        ORDER BY p.auction_end_time DESC
-        LIMIT $1 OFFSET $2
-      `, [parseInt(limit), offset]);
+      `;
+      
+      if (productTypeFilter) {
+        query += ` AND ${productTypeFilter}`;
+      }
+      
+      query += ` ORDER BY p.auction_end_time DESC LIMIT $1 OFFSET $2`;
 
-      const countResult = await pool.query(`
+      const result = await pool.query(query, [parseInt(limit), offset]);
+
+      let countQuery = `
         SELECT COUNT(*) as total
-        FROM products
-        WHERE status = 'approved' 
-          AND auction_end_time <= NOW()
-      `);
+        FROM products p
+        WHERE p.status = 'approved' 
+          AND p.auction_end_time <= NOW()
+      `;
+      
+      if (productTypeFilter) {
+        countQuery += ` AND ${productTypeFilter}`;
+      }
+
+      const countResult = await pool.query(countQuery);
 
       res.json({
         products: result.rows,
@@ -203,9 +289,9 @@ export const ProductController = {
         });
       }
 
-      // Check if product exists
+      // Check if product exists and get duration
       const productCheck = await pool.query(
-        "SELECT id, title, status FROM products WHERE id = $1",
+        "SELECT id, title, status, duration, product_type FROM products WHERE id = $1",
         [id]
       );
 
@@ -216,16 +302,32 @@ export const ProductController = {
         });
       }
 
-      // Update product status with rejection_reason cleared
+      const product = productCheck.rows[0];
+      const userRole = (req.user?.role || '').toLowerCase().trim();
+      
+      // Employee can only approve company products
+      if (userRole === 'employee' && product.product_type !== 'company_product') {
+        return res.status(403).json({ 
+          success: false,
+          message: "Employee can only approve company products" 
+        });
+      }
+      
+      const duration = product.duration || 1; // Default to 1 day if not set
+
+      // Calculate auction_end_time from approved_at + duration
+      // approved_at = NOW() (when admin approves)
+      // auction_end_time = approved_at + duration days
       const result = await pool.query(
         `UPDATE products 
          SET status = 'approved', 
              rejection_reason = NULL,
-             auction_end_time = COALESCE($2, NOW() + INTERVAL '7 days'),
+             approved_at = CURRENT_TIMESTAMP,
+             auction_end_time = COALESCE($2, CURRENT_TIMESTAMP + INTERVAL '1 day' * $3),
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $1 
          RETURNING *`,
-        [id, auctionEndTime]
+        [id, auctionEndTime, duration]
       );
 
       if (result.rowCount === 0) {
@@ -235,7 +337,12 @@ export const ProductController = {
         });
       }
 
-      console.log('✅ [ApproveProduct] Product approved:', result.rows[0].id);
+      console.log('✅ [ApproveProduct] Product approved:', {
+        productId: result.rows[0].id,
+        approvedAt: result.rows[0].approved_at,
+        auctionEndTime: result.rows[0].auction_end_time,
+        duration: duration
+      });
 
       res.json({
         success: true,
@@ -267,7 +374,7 @@ export const ProductController = {
 
       // Check if product exists
       const productCheck = await pool.query(
-        "SELECT id, title, status FROM products WHERE id = $1",
+        "SELECT id, title, status, product_type FROM products WHERE id = $1",
         [id]
       );
 
@@ -275,6 +382,17 @@ export const ProductController = {
         return res.status(404).json({ 
           success: false,
           message: "Product not found" 
+        });
+      }
+
+      const product = productCheck.rows[0];
+      const userRole = (req.user?.role || '').toLowerCase().trim();
+      
+      // Employee can only reject company products
+      if (userRole === 'employee' && product.product_type !== 'company_product') {
+        return res.status(403).json({ 
+          success: false,
+          message: "Employee can only reject company products" 
         });
       }
 
@@ -316,8 +434,10 @@ export const ProductController = {
   async getProductById(req, res) {
     try {
       const { id } = req.params;
+      const userRole = req.user?.role;
+      const productTypeFilter = this._getProductTypeFilter(userRole);
       
-      const result = await pool.query(`
+      let query = `
         SELECT 
           p.*,
           u.name as seller_name,
@@ -329,7 +449,16 @@ export const ProductController = {
         LEFT JOIN users u ON p.seller_id = u.id
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.id = $1
-      `, [id]);
+      `;
+      
+      const params = [id];
+      
+      // Apply product type filter for employees
+      if (productTypeFilter) {
+        query += ` AND ${productTypeFilter}`;
+      }
+      
+      const result = await pool.query(query, params);
 
       if (result.rows.length === 0) {
         return res.status(404).json({
@@ -400,19 +529,39 @@ export const ProductController = {
     }
   },
 
-  // PUT /admin/products/:id - Update product (Super Admin only)
+  // PUT /admin/products/:id - Update product (Super Admin or Employee)
   async updateProduct(req, res) {
     try {
       const { id } = req.params;
       const { title, description, image_url, startingPrice, category_id } = req.body;
       const userRole = (req.user.role || '').toLowerCase().trim();
 
-      // Permission check: Only Super Admin can edit products from admin panel
-      if (userRole !== 'superadmin') {
+      // Permission check: Super Admin or Employee can edit products
+      if (userRole !== 'superadmin' && userRole !== 'employee') {
         return res.status(403).json({
           success: false,
-          error: "Only Super Admin can edit products"
+          error: "Only Super Admin or Employee can edit products"
         });
+      }
+
+      // Employee can only edit company products
+      if (userRole === 'employee') {
+        const productCheck = await pool.query(
+          "SELECT product_type FROM products WHERE id = $1",
+          [id]
+        );
+        if (productCheck.rows.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: "Product not found"
+          });
+        }
+        if (productCheck.rows[0].product_type !== 'company_product') {
+          return res.status(403).json({
+            success: false,
+            error: "Employee can only edit company products"
+          });
+        }
       }
 
       // Check if product exists
@@ -494,18 +643,38 @@ export const ProductController = {
     }
   },
 
-  // DELETE /admin/products/:id - Delete product (Super Admin only)
+  // DELETE /admin/products/:id - Delete product (Super Admin or Employee)
   async deleteProduct(req, res) {
     try {
       const { id } = req.params;
       const userRole = (req.user.role || '').toLowerCase().trim();
 
-      // Permission check: Only Super Admin can delete products
-      if (userRole !== 'superadmin') {
+      // Permission check: Super Admin or Employee can delete products
+      if (userRole !== 'superadmin' && userRole !== 'employee') {
         return res.status(403).json({
           success: false,
-          error: "Only Super Admin can delete products"
+          error: "Only Super Admin or Employee can delete products"
         });
+      }
+
+      // Employee can only delete company products
+      if (userRole === 'employee') {
+        const productCheck = await pool.query(
+          "SELECT product_type FROM products WHERE id = $1",
+          [id]
+        );
+        if (productCheck.rows.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: "Product not found"
+          });
+        }
+        if (productCheck.rows[0].product_type !== 'company_product') {
+          return res.status(403).json({
+            success: false,
+            error: "Employee can only delete company products"
+          });
+        }
       }
 
       // Check if product exists
