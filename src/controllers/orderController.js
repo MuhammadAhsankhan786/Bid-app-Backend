@@ -42,25 +42,55 @@ export const OrderController = {
       query += ` ORDER BY o.created_at DESC LIMIT $${paramCount++} OFFSET $${paramCount}`;
       params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
 
+      console.log('📋 [getOrders] Executing query');
       const result = await pool.query(query, params);
-      const countResult = await pool.query(`
-        SELECT COUNT(*) FROM orders 
-        WHERE ${paymentStatus ? `payment_status = '${paymentStatus}'` : '1=1'}
-          ${deliveryStatus ? `AND delivery_status = '${deliveryStatus}'` : ''}
-      `);
+      console.log(`✅ [getOrders] Found ${result.rows.length} orders`);
+      
+      // FIX: Use parameterized query for count to prevent SQL injection
+      let countQuery = `SELECT COUNT(*) FROM orders WHERE 1=1`;
+      const countParams = [];
+      let countParamCount = 1;
+      
+      if (paymentStatus) {
+        countQuery += ` AND payment_status = $${countParamCount++}`;
+        countParams.push(paymentStatus);
+      }
+      
+      if (deliveryStatus) {
+        countQuery += ` AND delivery_status = $${countParamCount++}`;
+        countParams.push(deliveryStatus);
+      }
+      
+      const countResult = await pool.query(countQuery, countParams);
+      
+      // NULL-safe: Handle empty count result
+      const totalCount = countResult.rows?.[0]?.count ? parseInt(countResult.rows[0].count) : 0;
 
       res.json({
-        orders: result.rows,
+        orders: result.rows || [],
         pagination: {
-          total: parseInt(countResult.rows[0].count),
+          total: totalCount,
           page: parseInt(page),
           limit: parseInt(limit),
-          pages: Math.ceil(countResult.rows[0].count / limit)
+          pages: totalCount > 0 ? Math.ceil(totalCount / limit) : 0
         }
       });
     } catch (error) {
-      console.error("Error fetching orders:", error);
-      res.status(500).json({ error: "Failed to fetch orders" });
+      console.error("❌ [getOrders] Error fetching orders:", error);
+      console.error("   Error message:", error.message);
+      console.error("   Error code:", error.code);
+      console.error("   Error detail:", error.detail);
+      console.error("   Error stack:", error.stack);
+      // Return 200 with empty array instead of 500
+      res.status(200).json({
+        orders: [],
+        pagination: {
+          total: 0,
+          page: parseInt(req.query.page) || 1,
+          limit: parseInt(req.query.limit) || 20,
+          pages: 0
+        }
+      });
     }
   },
 

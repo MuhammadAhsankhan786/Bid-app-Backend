@@ -360,42 +360,75 @@ export const AdminController = {
     try {
       const { name, email, password, phone, role } = req.body;
       
+      console.log('📋 [createUser] Creating user:', { name, email, role });
+      
       if (!name || !email || !password || !role) {
         return res.status(400).json({ error: "Name, email, password, and role are required" });
       }
 
-      // Check if user already exists
+      // Check if user already exists (by email or phone)
       const existingUser = await pool.query(
-        "SELECT id FROM users WHERE email = $1",
-        [email]
+        "SELECT id FROM users WHERE email = $1 OR phone = $2",
+        [email, phone || '']
       );
 
       if (existingUser.rows.length > 0) {
-        return res.status(400).json({ error: "User with this email already exists" });
+        return res.status(400).json({ error: "User with this email or phone already exists" });
       }
 
       // Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Insert user
+      // FIX: Insert user with safe defaults - use 'approved' directly instead of COALESCE subquery
       const result = await pool.query(
-        `INSERT INTO users (name, email, password, phone, role, status)
-         VALUES ($1, $2, $3, $4, $5, 'approved')
+        `INSERT INTO users (name, email, password, phone, role, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, 'approved', CURRENT_TIMESTAMP)
          RETURNING id, name, email, phone, role, status, created_at`,
         [name, email, hashedPassword, phone || null, role]
       );
 
-      // Log admin action
-      await pool.query(
-        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
-         VALUES ($1, 'User created', 'user', $2)`,
-        [req.user.id, result.rows[0].id]
-      );
+      // NULL-safe: Check if result has rows before accessing
+      if (!result.rows || result.rows.length === 0) {
+        console.error("❌ [createUser] User insert returned no rows");
+        return res.status(500).json({ error: "Failed to create user - no data returned" });
+      }
+
+      console.log('✅ [createUser] User created:', result.rows[0].id);
+
+      // FIX: Log admin action only if table exists (don't fail if it doesn't)
+      try {
+        const tableCheck = await pool.query(
+          `SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'admin_activity_log'
+          )`
+        );
+        
+        if (tableCheck.rows?.[0]?.exists && req.user?.id) {
+          await pool.query(
+            `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
+             VALUES ($1, 'User created', 'user', $2)`,
+            [req.user.id, result.rows[0].id]
+          );
+        }
+      } catch (logError) {
+        console.warn("⚠️ [createUser] Could not log admin action:", logError.message);
+        // Continue even if logging fails
+      }
 
       res.status(201).json({ message: "User created successfully", user: result.rows[0] });
     } catch (error) {
-      console.error("Error creating user:", error);
-      res.status(500).json({ error: "Failed to create user" });
+      console.error("❌ [createUser] Error creating user:", error);
+      console.error("   Error message:", error.message);
+      console.error("   Error code:", error.code);
+      console.error("   Error detail:", error.detail);
+      console.error("   Error constraint:", error.constraint);
+      console.error("   Error stack:", error.stack);
+      res.status(500).json({ 
+        error: "Failed to create user",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 
@@ -501,14 +534,14 @@ export const AdminController = {
         [role, id]
       );
 
-      if (result.rowCount === 0) {
+      if (!result.rows || result.rows.length === 0) {
         console.log(`❌ [updateUserRole] Update query returned 0 rows for user ${id}`);
         return res.status(404).json({ error: "User not found or cannot be updated" });
       }
       
       console.log(`✅ [updateUserRole] User ${id} role updated from ${currentRole} to ${role}`);
 
-      // Log admin action (only if table exists)
+      // Log admin action (only if table exists) - NULL-safe
       try {
         const tableCheck = await pool.query(
           `SELECT EXISTS (
@@ -518,7 +551,7 @@ export const AdminController = {
           )`
         );
         
-        if (tableCheck.rows[0].exists) {
+        if (tableCheck.rows?.[0]?.exists && req.user?.id) {
           await pool.query(
             `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id, details)
              VALUES ($1, 'User role updated', 'user', $2, $3)`,
@@ -530,7 +563,11 @@ export const AdminController = {
         console.warn("Failed to log admin activity:", logError.message);
       }
 
-      res.json({ message: "User role updated successfully", user: result.rows[0] });
+      // NULL-safe: Ensure result.rows[0] exists before accessing
+      res.json({ 
+        message: "User role updated successfully", 
+        user: result.rows[0] || { id, role }
+      });
     } catch (error) {
       console.error("Error updating user role:", error);
       console.error("Error stack:", error.stack);
