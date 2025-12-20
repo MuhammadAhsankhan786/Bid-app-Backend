@@ -138,37 +138,72 @@ export const OrderController = {
       const { id } = req.params;
       const { paymentStatus, deliveryStatus } = req.body;
 
+      // Check which columns exist
+      const [paymentColCheck, deliveryColCheck] = await Promise.all([
+        pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.columns 
+            WHERE table_name = 'orders' 
+            AND column_name = 'payment_status'
+          )
+        `),
+        pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.columns 
+            WHERE table_name = 'orders' 
+            AND column_name = 'delivery_status'
+          )
+        `)
+      ]);
+
+      const hasPaymentStatus = paymentColCheck.rows?.[0]?.exists;
+      const hasDeliveryStatus = deliveryColCheck.rows?.[0]?.exists;
+
       const updates = [];
       const params = [];
       let paramCount = 1;
 
-      if (paymentStatus) {
+      if (paymentStatus && hasPaymentStatus) {
         updates.push(`payment_status = $${paramCount++}`);
         params.push(paymentStatus);
       }
 
-      if (deliveryStatus) {
+      if (deliveryStatus && hasDeliveryStatus) {
         updates.push(`delivery_status = $${paramCount++}`);
         params.push(deliveryStatus);
       }
 
       if (updates.length === 0) {
-        return res.status(400).json({ error: "No status updates provided" });
+        return res.status(400).json({ error: "No valid status updates provided or columns don't exist" });
       }
 
       params.push(id);
-      const query = `UPDATE orders SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`;
+      const idParamNum = paramCount;
+      const query = `UPDATE orders SET ${updates.join(', ')} WHERE id = $${idParamNum} RETURNING *`;
 
       const result = await pool.query(query, params);
 
-      if (result.rowCount === 0) {
+      if (!result.rows || result.rows.length === 0) {
         return res.status(404).json({ error: "Order not found" });
       }
 
       res.json({ success: true, order: result.rows[0] });
     } catch (error) {
       console.error("Error updating order:", error);
-      res.status(500).json({ error: "Failed to update order" });
+      console.error("   Error message:", error.message);
+      console.error("   Error code:", error.code);
+      console.error("   Error detail:", error.detail);
+      // Check if error is due to missing column
+      if (error.message && (error.message.includes('column') || error.message.includes('does not exist'))) {
+        return res.status(400).json({ 
+          error: "Order status update failed - column may not exist",
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+      res.status(500).json({ 
+        error: "Failed to update order",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 

@@ -463,30 +463,81 @@ export const AdminController = {
         return res.status(400).json({ error: "No fields to update" });
       }
 
+      // Add id to params - it will be the last parameter
       params.push(id);
+      const idParamNum = paramCount; // This is correct - id is at position paramCount
+      
+      console.log('📋 [updateUser] Update query:', {
+        updates: updates.join(', '),
+        params: params,
+        idParamNum: idParamNum,
+        userId: id
+      });
+      
+      // Build WHERE clause - allow updating non-admin users
+      // Only prevent updating admin/superadmin, allow others (moderator, viewer, employee can be updated)
       const result = await pool.query(
         `UPDATE users 
          SET ${updates.join(', ')}
-         WHERE id = $${paramCount} AND role != 'admin'
+         WHERE id = $${idParamNum} AND role NOT IN ('admin', 'superadmin')
          RETURNING id, name, email, phone, role, status, created_at`,
         params
       );
 
-      if (result.rowCount === 0) {
+      if (!result.rows || result.rows.length === 0) {
         return res.status(404).json({ error: "User not found or cannot be updated" });
       }
 
-      // Log admin action
-      await pool.query(
-        `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
-         VALUES ($1, 'User updated', 'user', $2)`,
-        [req.user.id, id]
-      );
+      // Log admin action (NULL-safe)
+      try {
+        const tableCheck = await pool.query(
+          `SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'admin_activity_log'
+          )`
+        );
+        
+        if (tableCheck.rows?.[0]?.exists && req.user?.id) {
+          await pool.query(
+            `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
+             VALUES ($1, 'User updated', 'user', $2)`,
+            [req.user.id, id]
+          );
+        }
+      } catch (logError) {
+        console.warn("⚠️ [updateUser] Could not log admin action:", logError.message);
+      }
 
       res.json({ message: "User updated successfully", user: result.rows[0] });
     } catch (error) {
-      console.error("Error updating user:", error);
-      res.status(500).json({ error: "Failed to update user" });
+      console.error("❌ [updateUser] Error updating user:", error);
+      console.error("   Error message:", error.message);
+      console.error("   Error code:", error.code);
+      console.error("   Error detail:", error.detail);
+      console.error("   Error constraint:", error.constraint);
+      console.error("   Error stack:", error.stack);
+      
+      // Handle specific constraint violations
+      if (error.code === '23505') { // Unique violation
+        return res.status(400).json({ 
+          error: "Duplicate value - email or phone already exists",
+          details: process.env.NODE_ENV === 'development' ? error.detail : undefined
+        });
+      }
+      
+      if (error.code === '23503') { // Foreign key violation
+        return res.status(400).json({ 
+          error: "Invalid reference",
+          details: process.env.NODE_ENV === 'development' ? error.detail : undefined
+        });
+      }
+      
+      // For other errors, return 500 but with safe response
+      res.status(500).json({ 
+        error: "Failed to update user",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   },
 

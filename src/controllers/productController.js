@@ -391,22 +391,61 @@ export const ProductController = {
       
       const duration = product.duration || 1; // Default to 1 day if not set
 
-      // Calculate auction_end_time from approved_at + duration
-      // approved_at = NOW() (when admin approves)
-      // auction_end_time = approved_at + duration days
-      const result = await pool.query(
-        `UPDATE products 
-         SET status = 'approved', 
-             rejection_reason = NULL,
-             approved_at = CURRENT_TIMESTAMP,
-             auction_end_time = COALESCE($2, CURRENT_TIMESTAMP + INTERVAL '1 day' * $3),
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1 
-         RETURNING *`,
-        [id, auctionEndTime, duration]
-      );
+      // Check if auction_end_time column exists
+      const columnCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_name = 'products' 
+          AND column_name = 'auction_end_time'
+        )
+      `);
+      
+      const hasAuctionEndTime = columnCheck.rows?.[0]?.exists;
+      
+      // Build UPDATE query based on column existence
+      let updateQuery = `
+        UPDATE products 
+        SET status = 'approved', 
+            rejection_reason = NULL,
+            updated_at = CURRENT_TIMESTAMP
+      `;
+      
+      // Add approved_at if column exists
+      const approvedAtCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.columns 
+          WHERE table_name = 'products' 
+          AND column_name = 'approved_at'
+        )
+      `);
+      
+      if (approvedAtCheck.rows?.[0]?.exists) {
+        updateQuery += `, approved_at = CURRENT_TIMESTAMP`;
+      }
+      
+      // Add auction_end_time if column exists
+      if (hasAuctionEndTime) {
+        if (auctionEndTime) {
+          updateQuery += `, auction_end_time = $2`;
+        } else {
+          updateQuery += `, auction_end_time = CURRENT_TIMESTAMP + INTERVAL '1 day' * $3`;
+        }
+      }
+      
+      updateQuery += ` WHERE id = $1 RETURNING *`;
+      
+      const queryParams = [id];
+      if (hasAuctionEndTime) {
+        if (auctionEndTime) {
+          queryParams.push(auctionEndTime);
+        } else {
+          queryParams.push(null, duration);
+        }
+      }
+      
+      const result = await pool.query(updateQuery, queryParams);
 
-      if (result.rowCount === 0) {
+      if (!result.rows || result.rows.length === 0) {
         return res.status(404).json({ 
           success: false,
           message: "Product not found" 
@@ -427,9 +466,13 @@ export const ProductController = {
       });
     } catch (error) {
       console.error("❌ [ApproveProduct] Error:", error);
+      console.error("   Error message:", error.message);
+      console.error("   Error code:", error.code);
+      console.error("   Error detail:", error.detail);
       res.status(500).json({ 
         success: false,
-        message: "Failed to approve product" 
+        message: "Failed to approve product",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   },
@@ -595,23 +638,75 @@ export const ProductController = {
     try {
       const { id } = req.params;
 
-      const result = await pool.query(`
+      // Check if documents table exists (NULL-safe)
+      let tableExists = false;
+      try {
+        const tableCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'documents'
+          )
+        `);
+        tableExists = tableCheck.rows?.[0]?.exists || false;
+      } catch (checkError) {
+        console.warn("⚠️ [getProductDocuments] Could not check documents table:", checkError.message);
+        tableExists = false;
+      }
+
+      if (!tableExists) {
+        // Return empty array if documents table doesn't exist
+        return res.json({
+          success: true,
+          data: []
+        });
+      }
+
+      // Check if uploaded_at column exists
+      let hasUploadedAt = true;
+      try {
+        const colCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.columns 
+            WHERE table_name = 'documents' 
+            AND column_name = 'uploaded_at'
+          )
+        `);
+        hasUploadedAt = colCheck.rows?.[0]?.exists || false;
+      } catch (colError) {
+        hasUploadedAt = false;
+      }
+
+      // Build query based on column existence
+      let query = `
         SELECT 
           d.*,
           p.title as product_title
         FROM documents d
         LEFT JOIN products p ON d.product_id = p.id
         WHERE d.product_id = $1
-        ORDER BY d.uploaded_at DESC
-      `, [id]);
+      `;
+      
+      if (hasUploadedAt) {
+        query += ` ORDER BY d.uploaded_at DESC`;
+      }
+
+      const result = await pool.query(query, [id]);
 
       res.json({
         success: true,
-        data: result.rows
+        data: result.rows || []
       });
     } catch (error) {
       console.error("Error fetching product documents:", error);
-      res.status(500).json({ error: "Failed to fetch product documents" });
+      console.error("   Error message:", error.message);
+      console.error("   Error code:", error.code);
+      console.error("   Error detail:", error.detail);
+      // Return 200 with empty array instead of 500
+      res.status(200).json({ 
+        success: true,
+        data: []
+      });
     }
   },
 

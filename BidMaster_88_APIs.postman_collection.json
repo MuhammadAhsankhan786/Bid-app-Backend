@@ -1,0 +1,2027 @@
+{
+	"info": {
+		"_postman_id": "bidmaster-88-apis",
+		"name": "BidMaster - All 88 APIs",
+		"description": "Complete API collection for BidMaster application - All 88 endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Auth APIs (11)",
+			"item": [
+				{
+					"name": "Send OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone\": \"+9647500914000\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/send-otp",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "send-otp"]
+						}
+					}
+				},
+				{
+					"name": "Verify OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone\": \"+9647500914000\",\n  \"otp\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/verify-otp",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "verify-otp"]
+						}
+					}
+				},
+				{
+					"name": "Register User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Test User\",\n  \"phone\": \"+9647500914000\",\n  \"email\": \"test@example.com\",\n  \"password\": \"Test@123\",\n  \"role\": \"company_products\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone\": \"+9647500914000\",\n  \"password\": \"test123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Admin Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone\": \"+9647500914000\",\n  \"role\": \"superadmin\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/admin-login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "admin-login"]
+						}
+					}
+				},
+				{
+					"name": "Login Phone",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone\": \"+9647500914000\",\n  \"role\": \"superadmin\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login-phone",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login-phone"]
+						}
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"your_refresh_token_here\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "refresh"]
+						}
+					}
+				},
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/profile",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Name\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/profile",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Send Change Phone OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone\": \"+9647500914001\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/change-phone/send-otp",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "change-phone", "send-otp"]
+						}
+					}
+				},
+				{
+					"name": "Verify Change Phone",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"phone\": \"+9647500914001\",\n  \"otp\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/change-phone/verify",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "change-phone", "verify"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Admin - Users (9)",
+			"item": [
+				{
+					"name": "Get Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/users",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users"]
+						}
+					}
+				},
+				{
+					"name": "Get User By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/users/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "138"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Test User\",\n  \"phone\": \"+9647500914000\",\n  \"email\": \"test@example.com\",\n  \"password\": \"Test@123\",\n  \"role\": \"company_products\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/users",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users"]
+						}
+					}
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated User\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/users/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "55"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/users/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "140"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Update User Role",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"role\": \"moderator\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/users/:id/role",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", ":id", "role"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "138"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Approve User",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/users/approve/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", "approve", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "138"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Block User",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/users/block/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", "block", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "138"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Adjust Reward",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"amount\": 100\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/users/:id/adjust-reward",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", ":id", "adjust-reward"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "138"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Admin - Dashboard (3)",
+			"item": [
+				{
+					"name": "Get Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/dashboard",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "dashboard"]
+						}
+					}
+				},
+				{
+					"name": "Get Dashboard Charts",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/dashboard/charts?period=week",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "dashboard", "charts"],
+							"query": [
+								{
+									"key": "period",
+									"value": "week"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Dashboard Categories",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/dashboard/categories",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "dashboard", "categories"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Admin - Products (11)",
+			"item": [
+				{
+					"name": "Get Products",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/products",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products"]
+						}
+					}
+				},
+				{
+					"name": "Get Pending Products",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/products/pending",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products", "pending"]
+						}
+					}
+				},
+				{
+					"name": "Get Live Auctions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/products/live",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products", "live"]
+						}
+					}
+				},
+				{
+					"name": "Get Rejected Products",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/products/rejected",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products", "rejected"]
+						}
+					}
+				},
+				{
+					"name": "Get Completed Products",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/products/completed",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products", "completed"]
+						}
+					}
+				},
+				{
+					"name": "Get Product By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/products/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Approve Product",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/products/approve/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products", "approve", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Reject Product",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rejection_reason\": \"Test rejection\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/products/reject/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products", "reject", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Product",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Updated Product\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/products/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Product",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/products/:id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Product Documents",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/products/:id/documents",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "products", ":id", "documents"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Admin - Orders (3)",
+			"item": [
+				{
+					"name": "Get Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/orders",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "orders"]
+						}
+					}
+				},
+				{
+					"name": "Get Order Stats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/orders/stats",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "orders", "stats"]
+						}
+					}
+				},
+				{
+					"name": "Update Order Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"paymentStatus\": \"completed\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/orders/:id/status",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "orders", ":id", "status"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Admin - Analytics (4)",
+			"item": [
+				{
+					"name": "Get Weekly Analytics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/analytics/weekly",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "analytics", "weekly"]
+						}
+					}
+				},
+				{
+					"name": "Get Monthly Analytics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/analytics/monthly",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "analytics", "monthly"]
+						}
+					}
+				},
+				{
+					"name": "Get Category Analytics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/analytics/categories",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "analytics", "categories"]
+						}
+					}
+				},
+				{
+					"name": "Get Top Products",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/analytics/top-products",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "analytics", "top-products"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "7. Admin - Auctions (3)",
+			"item": [
+				{
+					"name": "Get Active Auctions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/auctions/active",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "auctions", "active"]
+						}
+					}
+				},
+				{
+					"name": "Get Auction Bids",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/auctions/:id/bids",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "auctions", ":id", "bids"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Auction Winner",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/auction/:id/winner",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "auction", ":id", "winner"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "8. Admin - Notifications (1)",
+			"item": [
+				{
+					"name": "Get Notifications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/notifications",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "notifications"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "9. Admin - Payments (1)",
+			"item": [
+				{
+					"name": "Get Payments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/payments",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "payments"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "10. Admin - Settings (2)",
+			"item": [
+				{
+					"name": "Get Logo",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/settings/logo",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "settings", "logo"]
+						}
+					}
+				},
+				{
+					"name": "Upload Logo",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "logo",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/settings/logo",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "settings", "logo"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "11. Admin - Referrals (5)",
+			"item": [
+				{
+					"name": "Get Referrals",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/referrals",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "referrals"]
+						}
+					}
+				},
+				{
+					"name": "Revoke Referral",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/referrals/:id/revoke",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "referrals", ":id", "revoke"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Referral Settings",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/referral/settings",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "referral", "settings"]
+						}
+					}
+				},
+				{
+					"name": "Update Referral Settings",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"enabled\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/referral/settings",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "referral", "settings"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "12. Admin - Wallet (1)",
+			"item": [
+				{
+					"name": "Get Wallet Logs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/wallet/logs",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "wallet", "logs"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "13. Admin - Seller Earnings (1)",
+			"item": [
+				{
+					"name": "Get Seller Earnings",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/admin/seller/:id/earnings",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "seller", ":id", "earnings"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "130"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "14. Products - Mobile (8)",
+			"item": [
+				{
+					"name": "Get All Products",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products",
+							"host": ["{{base_url}}"],
+							"path": ["products"]
+						}
+					}
+				},
+				{
+					"name": "Get Product By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/products/:id",
+							"host": ["{{base_url}}"],
+							"path": ["products", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get My Products",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/products/mine",
+							"host": ["{{base_url}}"],
+							"path": ["products", "mine"]
+						}
+					}
+				},
+				{
+					"name": "Get Seller Products",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/products/seller/products",
+							"host": ["{{base_url}}"],
+							"path": ["products", "seller", "products"]
+						}
+					}
+				},
+				{
+					"name": "Create Product",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Test Product\",\n  \"description\": \"Test description\",\n  \"category_id\": 1,\n  \"startingPrice\": 100,\n  \"duration\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/products/create",
+							"host": ["{{base_url}}"],
+							"path": ["products", "create"]
+						}
+					}
+				},
+				{
+					"name": "Create Seller Product",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Seller Product\",\n  \"description\": \"Test\",\n  \"category_id\": 1,\n  \"startingPrice\": 150\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/products/seller/products",
+							"host": ["{{base_url}}"],
+							"path": ["products", "seller", "products"]
+						}
+					}
+				},
+				{
+					"name": "Update Product",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Updated Product\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/products/:id",
+							"host": ["{{base_url}}"],
+							"path": ["products", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Product",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/products/:id",
+							"host": ["{{base_url}}"],
+							"path": ["products", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "15. Bids (3)",
+			"item": [
+				{
+					"name": "Place Bid",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"product_id\": 132,\n  \"amount\": 150\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/bids/place",
+							"host": ["{{base_url}}"],
+							"path": ["bids", "place"]
+						}
+					}
+				},
+				{
+					"name": "Get My Bids",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/bids/mine",
+							"host": ["{{base_url}}"],
+							"path": ["bids", "mine"]
+						}
+					}
+				},
+				{
+					"name": "Get Bids By Product",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/bids/:id",
+							"host": ["{{base_url}}"],
+							"path": ["bids", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "16. Auctions (2)",
+			"item": [
+				{
+					"name": "Get Winner",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auction/winner/:id",
+							"host": ["{{base_url}}"],
+							"path": ["auction", "winner", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Seller Winner",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auction/seller/:id/winner",
+							"host": ["{{base_url}}"],
+							"path": ["auction", "seller", ":id", "winner"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "132"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "17. Orders (2)",
+			"item": [
+				{
+					"name": "Create Order",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"product_id\": 132\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/orders/create",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "create"]
+						}
+					}
+				},
+				{
+					"name": "Get My Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/orders/mine",
+							"host": ["{{base_url}}"],
+							"path": ["orders", "mine"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "18. Notifications (2)",
+			"item": [
+				{
+					"name": "Get Notifications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/notifications",
+							"host": ["{{base_url}}"],
+							"path": ["notifications"]
+						}
+					}
+				},
+				{
+					"name": "Mark Notification Read",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/notifications/read/:id",
+							"host": ["{{base_url}}"],
+							"path": ["notifications", "read", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "19. Categories (5)",
+			"item": [
+				{
+					"name": "Get All Categories",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/categories",
+							"host": ["{{base_url}}"],
+							"path": ["categories"]
+						}
+					}
+				},
+				{
+					"name": "Get Category By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/categories/:id",
+							"host": ["{{base_url}}"],
+							"path": ["categories", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Test Category\",\n  \"slug\": \"test-category\",\n  \"description\": \"Test category description\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/categories",
+							"host": ["{{base_url}}"],
+							"path": ["categories"]
+						}
+					}
+				},
+				{
+					"name": "Update Category",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Category\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/categories/:id",
+							"host": ["{{base_url}}"],
+							"path": ["categories", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Category",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/categories/:id",
+							"host": ["{{base_url}}"],
+							"path": ["categories", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "20. Banners (5)",
+			"item": [
+				{
+					"name": "Get All Banners",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/banners",
+							"host": ["{{base_url}}"],
+							"path": ["banners"]
+						}
+					}
+				},
+				{
+					"name": "Get Banner By ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/banners/:id",
+							"host": ["{{base_url}}"],
+							"path": ["banners", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Banner",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Test Banner\",\n  \"description\": \"Test\",\n  \"image_url\": \"https://example.com/image.jpg\",\n  \"link\": \"https://example.com\",\n  \"order\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/banners",
+							"host": ["{{base_url}}"],
+							"path": ["banners"]
+						}
+					}
+				},
+				{
+					"name": "Update Banner",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Updated Banner\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/banners/:id",
+							"host": ["{{base_url}}"],
+							"path": ["banners", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Banner",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/banners/:id",
+							"host": ["{{base_url}}"],
+							"path": ["banners", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "21. Referrals (2)",
+			"item": [
+				{
+					"name": "Get My Referral Code",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/referral/my-code",
+							"host": ["{{base_url}}"],
+							"path": ["referral", "my-code"]
+						}
+					}
+				},
+				{
+					"name": "Get Referral History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/referral/history",
+							"host": ["{{base_url}}"],
+							"path": ["referral", "history"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "22. Wallet (1)",
+			"item": [
+				{
+					"name": "Get Wallet",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/wallet",
+							"host": ["{{base_url}}"],
+							"path": ["wallet"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "23. Buyer Bidding History (1)",
+			"item": [
+				{
+					"name": "Get Buyer Bidding History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/buyer/bidding-history",
+							"host": ["{{base_url}}"],
+							"path": ["buyer", "bidding-history"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "24. Seller Earnings (1)",
+			"item": [
+				{
+					"name": "Get Seller Earnings",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/seller/earnings",
+							"host": ["{{base_url}}"],
+							"path": ["seller", "earnings"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "25. Uploads (2)",
+			"item": [
+				{
+					"name": "Upload Image",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "image",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/uploads/image",
+							"host": ["{{base_url}}"],
+							"path": ["uploads", "image"]
+						}
+					}
+				},
+				{
+					"name": "Upload Images",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{mobile_token}}"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "images",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/uploads/images",
+							"host": ["{{base_url}}"],
+							"path": ["uploads", "images"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://api.mazaadati.com/api",
+			"type": "string"
+		},
+		{
+			"key": "admin_token",
+			"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NTMsInBob25lIjoiKzk2NDc1MDA5MTQwMDAiLCJyb2xlIjoic3VwZXJhZG1pbiIsInNjb3BlIjoiYWRtaW4iLCJpYXQiOjE3NjYxNzIwNTMsImV4cCI6MTc2Njc3Njg1M30.zQItgDfi6jMB9n0vdk1dkOAxzSr21ksZBr3wC9aoCLQ",
+			"type": "string"
+		},
+		{
+			"key": "mobile_token",
+			"value": "your_mobile_token_here",
+			"type": "string"
+		}
+	]
+}
+
