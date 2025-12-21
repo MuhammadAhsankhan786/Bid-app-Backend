@@ -103,11 +103,12 @@ export const MobileProductController = {
       // For pending products, auction_end_time will be set to NULL
       // It will be calculated when approved: approved_at + duration
       // Insert product with images as JSONB array
+      // FIX: Removed product_type column as it doesn't exist in database
       const result = await pool.query(
         `INSERT INTO products 
          (seller_id, title, description, images, image_url, starting_price, starting_bid, 
-          current_price, current_bid, status, auction_end_time, duration, product_type, category_id, created_at, updated_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, $6, $6, $6, 'pending', NULL, $7, 'seller_product', $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
+          current_price, current_bid, status, auction_end_time, duration, category_id, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $6, $6, $6, 'pending', NULL, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
          RETURNING *`,
         [
           sellerId, 
