@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "logs": [
+    "🚀 Starting Admin/Moderator Phone Change Verification...",
+    "📋 Config:\n    - Superadmin Phone: +9647500914000\n    - Moderator Phone:  +9647800914000\n  ",
+    "\n🔍 [1/6] Checking Database State...",
+    "✅ Superadmin confirmed (ID: 115)",
+    "✅ Moderator confirmed (ID: 136)",
+    "\n🔑 [2/6] Logging in as Superadmin...",
+    "✅ Login successful",
+    "\n🧪 [3/6] Testing Moderator Phone: Default -> Temp",
+    "✅ Moderator phone changed successfully",
+    "\n🧪 [4/6] Testing Moderator Phone: Temp -> Default",
+    "✅ Moderator phone reverted successfully",
+    "\n🧪 [5/6] Testing Superadmin Phone: Default -> Temp",
+    "✅ Superadmin phone changed successfully",
+    "   Testing login with new Admin phone...",
+    "✅ Login with new Admin phone successful",
+    "\n🧪 [6/6] Testing Superadmin Phone: Temp -> Default",
+    "✅ Superadmin phone reverted successfully",
+    "\n🎉 ALL TESTS PASSED!",
+    "\n🧹 Final Cleanup...",
+    "✅ Defaults enforced."
+  ],
+  "error": null
+}

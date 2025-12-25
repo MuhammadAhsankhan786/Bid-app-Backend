@@ -1,5 +1,6 @@
 import pool from "../config/db.js";
 import { fixImageUrlsInResponse } from "../utils/imageUrlFixer.js";
+import { notifyAdmins } from "../utils/notificationUtils.js";
 
 export const MobileOrderController = {
   // POST /api/orders/create
@@ -138,6 +139,77 @@ export const MobileOrderController = {
       await pool.query(
         "UPDATE products SET status = 'sold' WHERE id = $1",
         [productId]
+      );
+
+      // Create notifications for buyer and seller
+      try {
+        // Notification for buyer (winner)
+        try {
+          await pool.query(
+            `INSERT INTO notifications (title, message, user_id, type, is_read, created_at)
+             VALUES ($1, $2, $3, $4, false, CURRENT_TIMESTAMP)`,
+            [
+              'You Won the Auction!',
+              `Congratulations! You won the auction for "${product.title}". Order #${orderNumber} has been created.`,
+              buyerId,
+              'win'
+            ]
+          );
+        } catch (notifError) {
+          // If column doesn't exist, try without type and title
+          if (notifError.code === '42703' || notifError.message.includes('column')) {
+            await pool.query(
+              `INSERT INTO notifications (message, user_id, is_read, created_at)
+               VALUES ($1, $2, false, CURRENT_TIMESTAMP)`,
+              [
+                `You won the auction for "${product.title}". Order #${orderNumber} created.`,
+                buyerId
+              ]
+            );
+          } else {
+            throw notifError;
+          }
+        }
+
+        // Notification for seller
+        try {
+          await pool.query(
+            `INSERT INTO notifications (title, message, user_id, type, is_read, created_at)
+             VALUES ($1, $2, $3, $4, false, CURRENT_TIMESTAMP)`,
+            [
+              'Product Sold',
+              `Your product "${product.title}" has been sold. Order #${orderNumber} has been created.`,
+              product.seller_id,
+              'order'
+            ]
+          );
+        } catch (notifError) {
+          // If column doesn't exist, try without type and title
+          if (notifError.code === '42703' || notifError.message.includes('column')) {
+            await pool.query(
+              `INSERT INTO notifications (message, user_id, is_read, created_at)
+               VALUES ($1, $2, false, CURRENT_TIMESTAMP)`,
+              [
+                `Your product "${product.title}" has been sold. Order #${orderNumber} created.`,
+                product.seller_id
+              ]
+            );
+          } else {
+            throw notifError;
+          }
+        }
+        console.log('✅ [CreateOrder] Notifications created for buyer and seller');
+      } catch (notifError) {
+        // Don't fail order creation if notification fails
+        console.log('⚠️ [CreateOrder] Failed to create notifications:', notifError.message);
+      }
+
+      // Notify Admins
+      await notifyAdmins(
+        'New Order Received',
+        `New order #${orderNumber} for "${product.title}" ($${product.current_bid || product.starting_price}).`,
+        'order',
+        result.rows[0].id
       );
 
       res.status(201).json({

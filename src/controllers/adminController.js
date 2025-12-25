@@ -3,6 +3,7 @@ import { ProductModel } from "../models/productModel.js";
 import pool from "../config/db.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import { normalizeIraqPhone, isValidIraqPhone } from "../utils/phoneUtils.js";
 
 export const AdminController = {
   // ✅ Admin Login (supports superadmin, moderator, viewer roles)
@@ -13,7 +14,7 @@ export const AdminController = {
     // Check if user exists and has admin role (superadmin, moderator, viewer, employee, or legacy admin)
     const allowedRoles = ['admin', 'superadmin', 'moderator', 'viewer', 'employee'];
     const userRole = user?.role?.toLowerCase();
-    
+
     if (!user || !allowedRoles.includes(userRole)) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
@@ -33,9 +34,9 @@ export const AdminController = {
 
     res.json({
       token,
-      admin: { 
-        id: user.id, 
-        name: user.name, 
+      admin: {
+        id: user.id,
+        name: user.name,
         email: user.email,
         role: normalizedRole
       }
@@ -46,15 +47,15 @@ export const AdminController = {
   async getUsers(req, res) {
     try {
       const { search, status, role, page = 1, limit = 20 } = req.query;
-      
+
       // Build WHERE conditions
       let whereConditions = ["u.role != 'admin'"];
       const params = [];
       let paramCount = 1;
 
       if (search) {
-        whereConditions.push(`(u.name ILIKE $${paramCount++} OR u.email ILIKE $${paramCount++})`);
-        params.push(`%${search}%`, `%${search}%`);
+        whereConditions.push(`(u.name ILIKE $${paramCount++} OR u.email ILIKE $${paramCount++} OR u.phone ILIKE $${paramCount++})`);
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
       }
 
       if (status) {
@@ -68,7 +69,7 @@ export const AdminController = {
       }
 
       const whereClause = whereConditions.join(' AND ');
-      
+
       // Main query - compute bids_count dynamically from bids table
       // Uses LEFT JOIN subquery to count bids per user
       let query = `
@@ -99,7 +100,7 @@ export const AdminController = {
         FROM users u
         WHERE ${whereClause}
       `;
-      
+
       // Count params are same as main query but without LIMIT/OFFSET
       const countParams = params.slice(0, -2);
 
@@ -128,9 +129,9 @@ export const AdminController = {
   async getUserById(req, res) {
     try {
       const { id } = req.params;
-      
+
       console.log(`🔍 [getUserById] Fetching user with ID: ${id}`);
-      
+
       // First check if user exists (simpler query)
       const userCheck = await pool.query(
         `SELECT id, name, email, phone, role, status, created_at 
@@ -141,21 +142,21 @@ export const AdminController = {
 
       if (userCheck.rows.length === 0) {
         console.log(`❌ [getUserById] User not found: ${id}`);
-        return res.status(404).json({ 
+        return res.status(404).json({
           success: false,
-          error: "User not found" 
+          error: "User not found"
         });
       }
 
       const user = userCheck.rows[0];
-      
+
       // Check if user is admin (exclude admin users)
       const adminRoles = ['admin', 'superadmin', 'moderator', 'viewer', 'employee'];
       if (adminRoles.includes(user.role?.toLowerCase())) {
         console.log(`⚠️ [getUserById] Attempted to fetch admin user: ${id}`);
-        return res.status(403).json({ 
+        return res.status(403).json({
           success: false,
-          error: "Cannot fetch admin user details" 
+          error: "Cannot fetch admin user details"
         });
       }
 
@@ -189,9 +190,9 @@ export const AdminController = {
       console.error("   Error message:", error.message);
       console.error("   Error code:", error.code);
       console.error("   Error stack:", error.stack);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        error: "Failed to fetch user", 
+        error: "Failed to fetch user",
         details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
       });
     }
@@ -201,7 +202,7 @@ export const AdminController = {
   async deleteUser(req, res) {
     try {
       const { id } = req.params;
-      
+
       const result = await pool.query(
         "DELETE FROM users WHERE id = $1 AND role != 'admin' RETURNING id",
         [id]
@@ -223,7 +224,7 @@ export const AdminController = {
         // Continue even if logging fails
       }
 
-      res.json({ 
+      res.json({
         success: true,
         message: "User deleted successfully",
         data: { id: result.rows[0].id }
@@ -231,7 +232,7 @@ export const AdminController = {
     } catch (error) {
       console.error("❌ [deleteUser] Error deleting user:", error);
       console.error("   Error message:", error.message);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to delete user",
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
@@ -246,7 +247,7 @@ export const AdminController = {
         "UPDATE users SET status = 'approved' WHERE id = $1 AND role != 'admin' RETURNING id, name, email, status",
         [id]
       );
-      
+
       if (result.rowCount === 0) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -263,15 +264,15 @@ export const AdminController = {
         // Continue even if logging fails
       }
 
-      res.json({ 
+      res.json({
         success: true,
-        message: "User approved successfully", 
-        user: result.rows[0] 
+        message: "User approved successfully",
+        user: result.rows[0]
       });
     } catch (error) {
       console.error("❌ [approveUser] Error approving user:", error);
       console.error("   Error message:", error.message);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to approve user",
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
@@ -286,7 +287,7 @@ export const AdminController = {
         "UPDATE users SET status = 'blocked' WHERE id = $1 AND role != 'admin' RETURNING id, name, email, status",
         [id]
       );
-      
+
       if (result.rowCount === 0) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -303,15 +304,15 @@ export const AdminController = {
         // Continue even if logging fails
       }
 
-      res.json({ 
+      res.json({
         success: true,
-        message: "User blocked successfully", 
-        user: result.rows[0] 
+        message: "User blocked successfully",
+        user: result.rows[0]
       });
     } catch (error) {
       console.error("❌ [blockUser] Error blocking user:", error);
       console.error("   Error message:", error.message);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to block user",
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
@@ -359,17 +360,28 @@ export const AdminController = {
   async createUser(req, res) {
     try {
       const { name, email, password, phone, role } = req.body;
-      
+
       console.log('📋 [createUser] Creating user:', { name, email, role });
-      
+
       if (!name || !email || !password || !role) {
         return res.status(400).json({ error: "Name, email, password, and role are required" });
       }
 
-      // Check if user already exists (by email or phone)
+      // Normalize phone number if provided
+      let normalizedPhone = null;
+      if (phone) {
+        normalizedPhone = normalizeIraqPhone(phone);
+        if (!normalizedPhone || !isValidIraqPhone(normalizedPhone)) {
+          return res.status(400).json({
+            error: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}`
+          });
+        }
+      }
+
+      // Check if user already exists (by email or phone - using normalized phone)
       const existingUser = await pool.query(
         "SELECT id FROM users WHERE email = $1 OR phone = $2",
-        [email, phone || '']
+        [email, normalizedPhone || '']
       );
 
       if (existingUser.rows.length > 0) {
@@ -380,11 +392,12 @@ export const AdminController = {
       const hashedPassword = await bcrypt.hash(password, 10);
 
       // FIX: Insert user with safe defaults - use 'approved' directly instead of COALESCE subquery
+      // Use normalized phone for database storage
       const result = await pool.query(
         `INSERT INTO users (name, email, password, phone, role, status, created_at)
          VALUES ($1, $2, $3, $4, $5, 'approved', CURRENT_TIMESTAMP)
          RETURNING id, name, email, phone, role, status, created_at`,
-        [name, email, hashedPassword, phone || null, role]
+        [name, email, hashedPassword, normalizedPhone, role]
       );
 
       // NULL-safe: Check if result has rows before accessing
@@ -404,7 +417,7 @@ export const AdminController = {
             AND table_name = 'admin_activity_log'
           )`
         );
-        
+
         if (tableCheck.rows?.[0]?.exists && req.user?.id) {
           await pool.query(
             `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
@@ -425,7 +438,7 @@ export const AdminController = {
       console.error("   Error detail:", error.detail);
       console.error("   Error constraint:", error.constraint);
       console.error("   Error stack:", error.stack);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to create user",
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
@@ -466,14 +479,51 @@ export const AdminController = {
       // Add id to params - it will be the last parameter
       params.push(id);
       const idParamNum = paramCount; // This is correct - id is at position paramCount
-      
+
       console.log('📋 [updateUser] Update query:', {
         updates: updates.join(', '),
         params: params,
         idParamNum: idParamNum,
         userId: id
       });
-      
+
+      // CRITICAL: Check if user is trying to update phone number for superadmin/moderator
+      // These roles have fixed phone numbers for login security
+      if (phone !== undefined) {
+        // STEP 1: Sanitize phone number before validation
+        const normalizedPhone = normalizeIraqPhone(phone);
+
+        // STEP 2: Validate phone format
+        if (!normalizedPhone || !isValidIraqPhone(normalizedPhone)) {
+          return res.status(400).json({
+            error: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}`
+          });
+        }
+
+        // STEP 3: Check if target user is protected role
+        const userCheck = await pool.query(
+          `SELECT role FROM users WHERE id = $1`,
+          [id]
+        );
+
+        if (userCheck.rows.length > 0) {
+          const userRole = (userCheck.rows[0].role || '').toLowerCase().trim();
+          if (userRole === 'superadmin' || userRole === 'admin' || userRole === 'moderator') {
+            return res.status(403).json({
+              error: "Cannot update phone number for Super Admin or Moderator. Phone number is fixed for login security."
+            });
+          }
+        }
+
+        // STEP 4: Use normalized phone for update
+        // Replace phone in params array with normalized version
+        const phoneIndex = updates.findIndex(u => u.includes('phone'));
+        if (phoneIndex !== -1) {
+          const paramIndex = phoneIndex; // phone is at this position in params array
+          params[paramIndex] = normalizedPhone;
+        }
+      }
+
       // Build WHERE clause - allow updating non-admin users
       // Only prevent updating admin/superadmin, allow others (moderator, viewer, employee can be updated)
       const result = await pool.query(
@@ -497,7 +547,7 @@ export const AdminController = {
             AND table_name = 'admin_activity_log'
           )`
         );
-        
+
         if (tableCheck.rows?.[0]?.exists && req.user?.id) {
           await pool.query(
             `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id)
@@ -517,25 +567,174 @@ export const AdminController = {
       console.error("   Error detail:", error.detail);
       console.error("   Error constraint:", error.constraint);
       console.error("   Error stack:", error.stack);
-      
+
       // Handle specific constraint violations
       if (error.code === '23505') { // Unique violation
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "Duplicate value - email or phone already exists",
           details: process.env.NODE_ENV === 'development' ? error.detail : undefined
         });
       }
-      
+
       if (error.code === '23503') { // Foreign key violation
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "Invalid reference",
           details: process.env.NODE_ENV === 'development' ? error.detail : undefined
         });
       }
-      
+
       // For other errors, return 500 but with safe response
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to update user",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  },
+
+  // ✅ Change Admin Phone Number (Special Endpoint - Only for Superadmin/Moderator)
+  async changeAdminPhone(req, res) {
+    try {
+      const { id } = req.params;
+      const { phone, confirmPassword } = req.body;
+      const currentUserId = req.user?.id;
+      const currentUserRole = (req.user?.role || '').toLowerCase().trim();
+
+      // Only Superadmin can change admin phone numbers
+      if (currentUserRole !== 'superadmin' && currentUserRole !== 'super-admin') {
+        return res.status(403).json({
+          error: "Only Superadmin can change admin phone numbers"
+        });
+      }
+
+      // Validate phone number is provided
+      if (!phone || phone.trim() === '') {
+        console.warn(`❌ [changeAdminPhone] Phone number missing`);
+        return res.status(400).json({ error: "Phone number is required" });
+      }
+
+      // STEP 1: Sanitize phone number (remove spaces, hyphens, etc.)
+      const normalizedPhone = normalizeIraqPhone(phone);
+      console.log(`🔍 [changeAdminPhone] Phone normalized: '${phone}' -> '${normalizedPhone}'`);
+
+      // STEP 2: Validate phone format AFTER sanitization
+      if (!normalizedPhone || !isValidIraqPhone(normalizedPhone)) {
+        console.warn(`❌ [changeAdminPhone] Invalid phone format: '${normalizedPhone}'`);
+        return res.status(400).json({
+          error: "Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: " + phone
+        });
+      }
+
+      // Get target user
+      const userCheck = await pool.query(
+        `SELECT id, name, email, phone, role, password FROM users WHERE id = $1`,
+        [id]
+      );
+
+      if (userCheck.rows.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const targetUser = userCheck.rows[0];
+      const targetRole = (targetUser.role || '').toLowerCase().trim();
+
+      // Only allow changing phone for Superadmin/Moderator
+      if (targetRole !== 'superadmin' && targetRole !== 'admin' && targetRole !== 'moderator') {
+        return res.status(403).json({
+          error: "This endpoint is only for changing Superadmin/Moderator phone numbers"
+        });
+      }
+
+      // STEP 3: Check if phone number already exists (using normalized phone)
+      const phoneCheck = await pool.query(
+        `SELECT id, name, role FROM users WHERE phone = $1 AND id != $2`,
+        [normalizedPhone, id]
+      );
+
+      if (phoneCheck.rows.length > 0) {
+        return res.status(400).json({
+          error: `Phone number already exists for user: ${phoneCheck.rows[0].name} (${phoneCheck.rows[0].role})`
+        });
+      }
+
+      // STEP 4: Require password confirmation (AFTER phone validation passes)
+      if (!confirmPassword) {
+        return res.status(400).json({
+          error: "Password confirmation is required for security"
+        });
+      }
+
+      // STEP 5: Verify current user's password
+      const currentUserCheck = await pool.query(
+        `SELECT password FROM users WHERE id = $1`,
+        [currentUserId]
+      );
+
+      if (currentUserCheck.rows.length === 0) {
+        return res.status(404).json({ error: "Current user not found" });
+      }
+
+      const passwordValid = await bcrypt.compare(confirmPassword, currentUserCheck.rows[0].password);
+      if (!passwordValid) {
+        // Use 403 Forbidden instead of 401 Unauthorized so the frontend interceptor doesn't log the user out
+        return res.status(403).json({
+          error: "Invalid password confirmation"
+        });
+      }
+
+      // STEP 6: Update phone number (using normalized phone)
+      const result = await pool.query(
+        `UPDATE users 
+         SET phone = $1, updated_at = NOW()
+         WHERE id = $2 AND role IN ('superadmin', 'admin', 'moderator')
+         RETURNING id, name, email, phone, role, updated_at`,
+        [normalizedPhone, id]
+      );
+
+      if (!result.rows || result.rows.length === 0) {
+        return res.status(404).json({ error: "Failed to update phone number" });
+      }
+
+      // Log admin action
+      try {
+        const tableCheck = await pool.query(
+          `SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'admin_activity_log'
+          )`
+        );
+
+        if (tableCheck.rows?.[0]?.exists && currentUserId) {
+          await pool.query(
+            `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id, created_at)
+             VALUES ($1, $2, 'user', $3, NOW())`,
+            [
+              currentUserId,
+              `Changed ${targetRole} phone number from ${targetUser.phone} to ${normalizedPhone}`,
+              id
+            ]
+          );
+        }
+      } catch (logError) {
+        console.warn("⚠️ [changeAdminPhone] Could not log admin action:", logError.message);
+      }
+
+      console.log(`✅ [changeAdminPhone] Phone number changed for ${targetRole}:`, {
+        userId: id,
+        oldPhone: targetUser.phone,
+        newPhone: normalizedPhone,
+        changedBy: currentUserId
+      });
+
+      res.json({
+        success: true,
+        message: `${targetRole.charAt(0).toUpperCase() + targetRole.slice(1)} phone number updated successfully`,
+        user: result.rows[0]
+      });
+    } catch (error) {
+      console.error("❌ [changeAdminPhone] Error:", error);
+      res.status(500).json({
+        error: "Failed to change admin phone number",
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
@@ -548,12 +747,12 @@ export const AdminController = {
       const { role } = req.body;
 
       if (!role || !['company_products', 'seller_products', 'admin', 'superadmin', 'moderator', 'viewer', 'employee'].includes(role)) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "Valid role is required",
           validRoles: ['company_products', 'seller_products', 'admin', 'superadmin', 'moderator', 'viewer', 'employee']
         });
       }
-      
+
       console.log(`🔄 [updateUserRole] Attempting to change user ${id} role to ${role}`);
 
       // First check if user exists and get current role
@@ -561,21 +760,21 @@ export const AdminController = {
         `SELECT id, role FROM users WHERE id = $1`,
         [id]
       );
-      
+
       if (userCheck.rows.length === 0) {
         console.log(`❌ [updateUserRole] User ${id} not found`);
         return res.status(404).json({ error: "User not found" });
       }
-      
+
       const currentRole = userCheck.rows[0].role;
       console.log(`📋 [updateUserRole] User ${id} current role: ${currentRole}`);
-      
+
       // Check if user is admin (cannot change admin role)
       if (currentRole === 'admin') {
         console.log(`⚠️ [updateUserRole] Cannot change admin user role`);
         return res.status(403).json({ error: "Cannot change admin user role" });
       }
-      
+
       // Perform update
       const result = await pool.query(
         `UPDATE users 
@@ -589,7 +788,7 @@ export const AdminController = {
         console.log(`❌ [updateUserRole] Update query returned 0 rows for user ${id}`);
         return res.status(404).json({ error: "User not found or cannot be updated" });
       }
-      
+
       console.log(`✅ [updateUserRole] User ${id} role updated from ${currentRole} to ${role}`);
 
       // Log admin action (only if table exists) - NULL-safe
@@ -601,7 +800,7 @@ export const AdminController = {
             AND table_name = 'admin_activity_log'
           )`
         );
-        
+
         if (tableCheck.rows?.[0]?.exists && req.user?.id) {
           await pool.query(
             `INSERT INTO admin_activity_log (admin_id, action, entity_type, entity_id, details)
@@ -615,8 +814,8 @@ export const AdminController = {
       }
 
       // NULL-safe: Ensure result.rows[0] exists before accessing
-      res.json({ 
-        message: "User role updated successfully", 
+      res.json({
+        message: "User role updated successfully",
         user: result.rows[0] || { id, role }
       });
     } catch (error) {
@@ -628,8 +827,8 @@ export const AdminController = {
         detail: error.detail,
         constraint: error.constraint
       });
-      res.status(500).json({ 
-        error: "Failed to update user role", 
+      res.status(500).json({
+        error: "Failed to update user role",
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }

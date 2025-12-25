@@ -27,6 +27,9 @@ router.get("/users/:id", authorizeRoles("superadmin", "moderator", "viewer"), Ad
 router.get("/users", authorizeRoles("superadmin", "moderator"), AdminController.getUsers);
 // POST /users - superadmin only
 router.post("/users", authorizeRoles("superadmin"), AdminController.createUser);
+// Special endpoint for changing Superadmin/Moderator phone numbers (requires password confirmation)
+// MUST be before /users/:id to avoid route conflict
+router.put("/users/:id/change-admin-phone", authorizeRoles("superadmin"), AdminController.changeAdminPhone);
 // PUT /users/:id - superadmin, moderator
 router.put("/users/:id", authorizeRoles("superadmin", "moderator"), AdminController.updateUser);
 // DELETE /users/:id - superadmin only
@@ -39,14 +42,16 @@ router.patch("/users/approve/:id", authorizeRoles("superadmin", "moderator"), Ad
 router.patch("/users/block/:id", authorizeRoles("superadmin", "moderator"), AdminController.blockUser);
 
 // --- DASHBOARD ---
-// GET /dashboard - superadmin, moderator, viewer (dashboard summary)
-router.get("/dashboard", authorizeRoles("superadmin", "moderator", "viewer"), DashboardController.getDashboard);
-// GET /dashboard/charts - superadmin, moderator, viewer
-router.get("/dashboard/charts", authorizeRoles("superadmin", "moderator", "viewer"), DashboardController.getChartData);
-// GET /dashboard/categories - superadmin, moderator, viewer
-router.get("/dashboard/categories", authorizeRoles("superadmin", "moderator", "viewer"), DashboardController.getCategoryData);
+// GET /dashboard - superadmin, moderator, viewer, employee (dashboard summary)
+router.get("/dashboard", authorizeRoles("superadmin", "moderator", "viewer", "employee"), DashboardController.getDashboard);
+// GET /dashboard/charts - superadmin, moderator, viewer, employee
+router.get("/dashboard/charts", authorizeRoles("superadmin", "moderator", "viewer", "employee"), DashboardController.getChartData);
+// GET /dashboard/categories - superadmin, moderator, viewer, employee
+router.get("/dashboard/categories", authorizeRoles("superadmin", "moderator", "viewer", "employee"), DashboardController.getCategoryData);
 
 // --- PRODUCTS ---
+// POST /products - superadmin, moderator, employee (create company products - seller_id = NULL)
+router.post("/products", authorizeRoles("superadmin", "moderator", "employee"), ProductController.createProduct);
 // GET /products - superadmin, moderator, viewer, employee (employee sees only company products)
 router.get("/products", authorizeRoles("superadmin", "moderator", "viewer", "employee"), ProductController.getProducts);
 // GET /products/pending - superadmin, moderator, viewer, employee (employee sees only company products)

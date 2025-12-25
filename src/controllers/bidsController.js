@@ -236,6 +236,93 @@ export const BidsController = {
         await pool.query('COMMIT');
         console.log('🧩 [BidPlace] ✅ Transaction committed successfully');
 
+        // Create notification for seller about new bid
+        try {
+          await pool.query(
+            `INSERT INTO notifications (title, message, user_id, type, is_read, created_at)
+             VALUES ($1, $2, $3, $4, false, CURRENT_TIMESTAMP)`,
+            [
+              'New Bid Placed',
+              `Someone placed a bid of $${bidAmount} on your product "${product.title}"`,
+              product.seller_id,
+              'bid'
+            ]
+          );
+          console.log('✅ [BidPlace] Notification created for seller');
+        } catch (notifError) {
+          // If column doesn't exist, try without type and title
+          if (notifError.code === '42703' || notifError.message.includes('column')) {
+            try {
+              await pool.query(
+                `INSERT INTO notifications (message, user_id, is_read, created_at)
+                 VALUES ($1, $2, false, CURRENT_TIMESTAMP)`,
+                [
+                  `New bid: $${bidAmount} placed on "${product.title}"`,
+                  product.seller_id
+                ]
+              );
+              console.log('✅ [BidPlace] Notification created (fallback schema)');
+            } catch (fallbackError) {
+              console.log('⚠️ [BidPlace] Failed to create notification:', fallbackError.message);
+            }
+          } else {
+            console.log('⚠️ [BidPlace] Failed to create notification:', notifError.message);
+          }
+        }
+
+        // Create notifications for other bidders on the same product
+        // This alerts users who have bid on this product that someone else has also bid
+        try {
+          // Get all unique users who have bid on this product (except current bidder)
+          const previousBiddersResult = await pool.query(
+            `SELECT DISTINCT user_id 
+             FROM bids 
+             WHERE product_id = $1 AND user_id != $2`,
+            [productIdNum, buyerId]
+          );
+
+          const previousBidders = previousBiddersResult.rows;
+          console.log(`📢 [BidPlace] Found ${previousBidders.length} previous bidders to notify`);
+
+          // Send notification to each previous bidder
+          for (const bidder of previousBidders) {
+            try {
+              await pool.query(
+                `INSERT INTO notifications (title, message, user_id, type, is_read, created_at)
+                 VALUES ($1, $2, $3, $4, false, CURRENT_TIMESTAMP)`,
+                [
+                  'New Bid on Product You Bidded',
+                  `Someone placed a new bid of $${bidAmount} on "${product.title}" that you also bid on`,
+                  bidder.user_id,
+                  'bid'
+                ]
+              );
+            } catch (notifError) {
+              // If column doesn't exist, try without type and title
+              if (notifError.code === '42703' || notifError.message.includes('column')) {
+                try {
+                  await pool.query(
+                    `INSERT INTO notifications (message, user_id, is_read, created_at)
+                     VALUES ($1, $2, false, CURRENT_TIMESTAMP)`,
+                    [
+                      `New bid: $${bidAmount} placed on "${product.title}" that you also bid on`,
+                      bidder.user_id
+                    ]
+                  );
+                } catch (fallbackError) {
+                  console.log(`⚠️ [BidPlace] Failed to notify bidder ${bidder.user_id}:`, fallbackError.message);
+                }
+              } else {
+                console.log(`⚠️ [BidPlace] Failed to notify bidder ${bidder.user_id}:`, notifError.message);
+              }
+            }
+          }
+          console.log(`✅ [BidPlace] Notifications sent to ${previousBidders.length} previous bidders`);
+        } catch (biddersNotifError) {
+          // Don't fail the bid if notification fails
+          console.log('⚠️ [BidPlace] Failed to notify previous bidders:', biddersNotifError.message);
+        }
+
         // Prepare response data
         const responseData = {
           id: newBid.id,

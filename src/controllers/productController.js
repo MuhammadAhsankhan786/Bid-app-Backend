@@ -38,12 +38,13 @@ export const ProductController = {
       const params = [];
       let paramCount = 1;
 
-      // FIX: Skip product type filter to prevent errors if column doesn't exist
-      // Apply product type filter based on role
-      // const productTypeFilter = this._getProductTypeFilter(userRole);
-      // if (productTypeFilter) {
-      //   query += ` AND ${productTypeFilter}`;
-      // }
+      // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
+      // Company products section should only show products added by employees
+      const normalizedRole = (userRole || '').toLowerCase().trim();
+      if (normalizedRole === 'employee') {
+        query += ` AND p.seller_id IS NULL`;
+        // Employee can only see company products (no seller products)
+      }
 
       if (status) {
         query += ` AND p.status = $${paramCount++}`;
@@ -137,6 +138,8 @@ export const ProductController = {
       let query = `
         SELECT 
           p.*,
+          p.created_at AT TIME ZONE 'UTC' as created_at,
+          p.approved_at AT TIME ZONE 'UTC' as approved_at,
           u.name as seller_name,
           u.email as seller_email,
           c.name as category_name
@@ -146,10 +149,11 @@ export const ProductController = {
         WHERE p.status = 'pending'
       `;
       
-      // FIX: Disabled to prevent 500 errors when product_type column missing
-      // if (productTypeFilter) {
-      //   query += ` AND ${productTypeFilter}`;
-      // }
+      // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
+      const normalizedRole = (userRole || '').toLowerCase().trim();
+      if (normalizedRole === 'employee') {
+        query += ` AND p.seller_id IS NULL`;
+      }
       
       query += ` ORDER BY p.created_at DESC`;
 
@@ -157,8 +161,14 @@ export const ProductController = {
       const result = await pool.query(query);
       console.log(`✅ [getPendingProducts] Found ${result.rows.length} pending products`);
 
-      // NULL-safe: Return empty array if no results
-      res.json(result.rows || []);
+      // Convert timestamps to ISO strings for consistent frontend parsing
+      const products = (result.rows || []).map(product => ({
+        ...product,
+        created_at: product.created_at ? new Date(product.created_at).toISOString() : null,
+        approved_at: product.approved_at ? new Date(product.approved_at).toISOString() : null
+      }));
+
+      res.json(products);
     } catch (error) {
       console.error("❌ [getPendingProducts] Error fetching pending products:", error);
       console.error("   Error message:", error.message);
@@ -193,10 +203,11 @@ export const ProductController = {
           AND p.auction_end_time > NOW()
       `;
       
-      // FIX: Disabled to prevent 500 errors when product_type column missing
-      // if (productTypeFilter) {
-      //   query += ` AND ${productTypeFilter}`;
-      // }
+      // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
+      const normalizedRole = (userRole || '').toLowerCase().trim();
+      if (normalizedRole === 'employee') {
+        query += ` AND p.seller_id IS NULL`;
+      }
       
       query += ` ORDER BY p.auction_end_time ASC`;
 
@@ -241,10 +252,11 @@ export const ProductController = {
         WHERE p.status = 'rejected'
       `;
       
-      // FIX: Disabled to prevent 500 errors when product_type column missing
-      // if (productTypeFilter) {
-      //   query += ` AND ${productTypeFilter}`;
-      // }
+      // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
+      const normalizedRole = (userRole || '').toLowerCase().trim();
+      if (normalizedRole === 'employee') {
+        query += ` AND p.seller_id IS NULL`;
+      }
       
       query += ` ORDER BY p.updated_at DESC, p.created_at DESC`;
 
@@ -288,10 +300,11 @@ export const ProductController = {
           AND p.auction_end_time <= NOW()
       `;
       
-      // FIX: Disabled to prevent 500 errors when product_type column missing
-      // if (productTypeFilter) {
-      //   query += ` AND ${productTypeFilter}`;
-      // }
+      // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
+      const normalizedRole = (userRole || '').toLowerCase().trim();
+      if (normalizedRole === 'employee') {
+        query += ` AND p.seller_id IS NULL`;
+      }
       
       query += ` ORDER BY p.auction_end_time DESC LIMIT $1 OFFSET $2`;
 
@@ -306,10 +319,11 @@ export const ProductController = {
           AND p.auction_end_time <= NOW()
       `;
       
-      // FIX: Disabled to prevent 500 errors when product_type column missing
-      // if (productTypeFilter) {
-      //   countQuery += ` AND ${productTypeFilter}`;
-      // }
+      // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
+      // normalizedRole already declared above, reusing it here
+      if (normalizedRole === 'employee') {
+        countQuery += ` AND p.seller_id IS NULL`;
+      }
 
       const countResult = await pool.query(countQuery);
       
@@ -364,9 +378,8 @@ export const ProductController = {
       }
 
       // Check if product exists and get duration
-      // FIX: Don't select product_type if column doesn't exist (handle gracefully)
       const productCheck = await pool.query(
-        "SELECT id, title, status, duration FROM products WHERE id = $1",
+        "SELECT id, title, status, duration, seller_id FROM products WHERE id = $1",
         [id]
       );
 
@@ -380,68 +393,99 @@ export const ProductController = {
       const product = productCheck.rows[0];
       const userRole = (req.user?.role || '').toLowerCase().trim();
       
-      // FIX: Skip product_type check to prevent errors if column missing
-      // Employee can only approve company products
-      // if (userRole === 'employee' && product.product_type !== 'company_product') {
-      //   return res.status(403).json({ 
-      //     success: false,
-      //     message: "Employee can only approve company products" 
-      //   });
-      // }
+      // Check if product is already approved
+      if (product.status === 'approved') {
+        return res.status(400).json({ 
+          success: false,
+          message: "Product is already approved" 
+        });
+      }
+      
+      // Employee can only approve company products (seller_id = NULL)
+      if (userRole === 'employee' && product.seller_id !== null) {
+        return res.status(403).json({ 
+          success: false,
+          message: "Employee can only approve company products (not seller products)" 
+        });
+      }
       
       const duration = product.duration || 1; // Default to 1 day if not set
 
-      // Check if auction_end_time column exists
-      const columnCheck = await pool.query(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.columns 
-          WHERE table_name = 'products' 
-          AND column_name = 'auction_end_time'
-        )
-      `);
+      // Check if columns exist (with error handling for production)
+      let hasAuctionEndTime = false;
+      let hasApprovedAt = false;
       
-      const hasAuctionEndTime = columnCheck.rows?.[0]?.exists;
-      
-      // Build UPDATE query based on column existence
-      let updateQuery = `
-        UPDATE products 
-        SET status = 'approved', 
-            rejection_reason = NULL,
-            updated_at = CURRENT_TIMESTAMP
-      `;
-      
-      // Add approved_at if column exists
-      const approvedAtCheck = await pool.query(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.columns 
-          WHERE table_name = 'products' 
-          AND column_name = 'approved_at'
-        )
-      `);
-      
-      if (approvedAtCheck.rows?.[0]?.exists) {
-        updateQuery += `, approved_at = CURRENT_TIMESTAMP`;
+      try {
+        const columnCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'products' 
+            AND column_name = 'auction_end_time'
+          ) as exists
+        `);
+        hasAuctionEndTime = columnCheck.rows?.[0]?.exists || false;
+      } catch (colError) {
+        console.warn('⚠️ [ApproveProduct] Could not check auction_end_time column:', colError.message);
+        // Assume column exists if check fails (safer for production)
+        hasAuctionEndTime = true;
       }
       
-      // Add auction_end_time if column exists
-      if (hasAuctionEndTime) {
-        if (auctionEndTime) {
-          updateQuery += `, auction_end_time = $2`;
-        } else {
-          updateQuery += `, auction_end_time = CURRENT_TIMESTAMP + INTERVAL '1 day' * $3`;
-        }
+      try {
+        const approvedAtCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'products' 
+            AND column_name = 'approved_at'
+          ) as exists
+        `);
+        hasApprovedAt = approvedAtCheck.rows?.[0]?.exists || false;
+      } catch (colError) {
+        console.warn('⚠️ [ApproveProduct] Could not check approved_at column:', colError.message);
+        // Assume column exists if check fails (safer for production)
+        hasApprovedAt = true;
       }
       
-      updateQuery += ` WHERE id = $1 RETURNING *`;
+      // Build UPDATE query - use safe approach that works even if columns don't exist
+      const updateFields = [
+        "status = 'approved'",
+        "rejection_reason = NULL",
+        "updated_at = CURRENT_TIMESTAMP"
+      ];
+      
+      if (hasApprovedAt) {
+        updateFields.push("approved_at = CURRENT_TIMESTAMP");
+      }
       
       const queryParams = [id];
+      let paramIndex = 2;
+      
       if (hasAuctionEndTime) {
         if (auctionEndTime) {
+          updateFields.push(`auction_end_time = $${paramIndex}`);
           queryParams.push(auctionEndTime);
+          paramIndex++;
         } else {
-          queryParams.push(null, duration);
+          updateFields.push(`auction_end_time = CURRENT_TIMESTAMP + INTERVAL '1 day' * $${paramIndex}`);
+          queryParams.push(duration);
+          paramIndex++;
         }
       }
+      
+      const updateQuery = `
+        UPDATE products 
+        SET ${updateFields.join(', ')}
+        WHERE id = $1
+        RETURNING *
+      `;
+      
+      console.log('🔍 [ApproveProduct] Executing query:', {
+        query: updateQuery.replace(/\$\d+/g, '?'),
+        params: queryParams,
+        hasAuctionEndTime,
+        hasApprovedAt
+      });
       
       const result = await pool.query(updateQuery, queryParams);
 
@@ -469,10 +513,32 @@ export const ProductController = {
       console.error("   Error message:", error.message);
       console.error("   Error code:", error.code);
       console.error("   Error detail:", error.detail);
+      console.error("   Error constraint:", error.constraint);
+      console.error("   Error stack:", error.stack);
+      console.error("   Product ID:", req.params.id);
+      console.error("   User ID:", req.user?.id);
+      console.error("   User Role:", req.user?.role);
+      
+      // Provide more helpful error messages
+      let errorMessage = "Failed to approve product";
+      if (error.code === '42703') {
+        errorMessage = "Database column error - please check database schema";
+      } else if (error.code === '23505') {
+        errorMessage = "Duplicate entry error";
+      } else if (error.code === '23503') {
+        errorMessage = "Foreign key constraint error";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       res.status(500).json({ 
         success: false,
-        message: "Failed to approve product",
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        message: errorMessage,
+        error: process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production' ? {
+          code: error.code,
+          detail: error.detail,
+          constraint: error.constraint
+        } : undefined
       });
     }
   },
@@ -492,9 +558,8 @@ export const ProductController = {
       }
 
       // Check if product exists
-      // FIX: Don't select product_type if column doesn't exist (handle gracefully)
       const productCheck = await pool.query(
-        "SELECT id, title, status FROM products WHERE id = $1",
+        "SELECT id, title, status, seller_id FROM products WHERE id = $1",
         [id]
       );
 
@@ -508,14 +573,13 @@ export const ProductController = {
       const product = productCheck.rows[0];
       const userRole = (req.user?.role || '').toLowerCase().trim();
       
-      // FIX: Skip product_type check to prevent errors if column missing
-      // Employee can only reject company products
-      // if (userRole === 'employee' && product.product_type !== 'company_product') {
-      //   return res.status(403).json({ 
-      //     success: false,
-      //     message: "Employee can only reject company products" 
-      //   });
-      // }
+      // Employee can only reject company products (seller_id = NULL)
+      if (userRole === 'employee' && product.seller_id !== null) {
+        return res.status(403).json({ 
+          success: false,
+          message: "Employee can only reject company products (not seller products)" 
+        });
+      }
 
       // Update product status with rejection reason
       const result = await pool.query(
@@ -575,10 +639,11 @@ export const ProductController = {
       
       const params = [id];
       
-      // FIX: Disabled to prevent 500 errors when product_type column missing
-      // if (productTypeFilter) {
-      //   query += ` AND ${productTypeFilter}`;
-      // }
+      // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
+      const normalizedRole = (userRole || '').toLowerCase().trim();
+      if (normalizedRole === 'employee') {
+        query += ` AND p.seller_id IS NULL`;
+      }
       
       console.log('📋 [getProductById] Fetching product:', id);
       const result = await pool.query(query, params);
@@ -725,32 +790,28 @@ export const ProductController = {
         });
       }
 
-      // FIX: Skip product_type check to prevent errors if column missing
-      // Employee can only edit company products
-      // if (userRole === 'employee') {
-      //   const productCheck = await pool.query(
-      //     "SELECT product_type FROM products WHERE id = $1",
-      //     [id]
-      //   );
-      //   if (productCheck.rows.length === 0) {
-      //     return res.status(404).json({
-      //       success: false,
-      //       error: "Product not found"
-      //     });
-      //   }
-      //   if (productCheck.rows[0].product_type !== 'company_product') {
-      //     return res.status(403).json({
-      //       success: false,
-      //       error: "Employee can only edit company products"
-      //     });
-      //   }
-      // }
-
-      // Check if product exists
+      // Check if product exists and get seller_id
       const productCheck = await pool.query(
-        "SELECT id FROM products WHERE id = $1",
+        "SELECT id, seller_id FROM products WHERE id = $1",
         [id]
       );
+
+      if (productCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found"
+        });
+      }
+
+      // Employee can only edit company products (seller_id = NULL)
+      if (userRole === 'employee') {
+        if (productCheck.rows[0].seller_id !== null) {
+          return res.status(403).json({
+            success: false,
+            error: "Employee can only edit company products (not seller products)"
+          });
+        }
+      }
 
       if (productCheck.rows.length === 0) {
         return res.status(404).json({
@@ -825,6 +886,212 @@ export const ProductController = {
     }
   },
 
+  // POST /admin/products - Create company product (Super Admin, Moderator, or Employee)
+  async createProduct(req, res) {
+    try {
+      const { title, description, images, image_url, startingPrice, duration, category_id } = req.body;
+      const userRole = (req.user.role || '').toLowerCase().trim();
+
+      console.log('🔍 [AdminCreateProduct] Request received:', {
+        userId: req.user.id,
+        userRole: userRole,
+        title: title,
+        hasImages: !!images,
+        hasImageUrl: !!image_url,
+        category_id: category_id
+      });
+
+      // Permission check: Only Super Admin, Moderator, or Employee can create company products
+      if (!['superadmin', 'moderator', 'employee'].includes(userRole)) {
+        return res.status(403).json({
+          success: false,
+          error: `Only Super Admin, Moderator, or Employee can create company products. Your current role: ${req.user.role || 'unknown'}`
+        });
+      }
+
+      // Validation: Required fields
+      if (!title || !startingPrice) {
+        return res.status(400).json({
+          success: false,
+          error: "Title and starting price are required"
+        });
+      }
+
+      // Validate category_id is required
+      if (!category_id) {
+        return res.status(400).json({
+          success: false,
+          error: "Category is required"
+        });
+      }
+
+      // Validate category_id exists and is active
+      const categoryCheck = await pool.query(
+        "SELECT id, active FROM categories WHERE id = $1",
+        [category_id]
+      );
+
+      if (categoryCheck.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Category not found"
+        });
+      }
+
+      if (!categoryCheck.rows[0].active) {
+        return res.status(400).json({
+          success: false,
+          error: "Category is not active"
+        });
+      }
+
+      // Handle images: Support both new 'images' array and legacy 'image_url'
+      let imagesArray = [];
+      if (images && Array.isArray(images) && images.length > 0) {
+        imagesArray = images.filter(url => url && url.trim() !== '');
+      } else if (image_url) {
+        // Legacy support: convert single image_url to array
+        if (Array.isArray(image_url)) {
+          imagesArray = image_url.filter(url => url && url.trim() !== '');
+        } else if (typeof image_url === 'string' && image_url.trim() !== '') {
+          imagesArray = [image_url];
+        }
+      }
+
+      // Validate: At least 1 image required
+      if (imagesArray.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "At least one image is required"
+        });
+      }
+
+      // Validate: Maximum 6 images
+      if (imagesArray.length > 6) {
+        return res.status(400).json({
+          success: false,
+          error: "Maximum 6 images allowed"
+        });
+      }
+
+      // Validate duration: must be 1, 2, or 3 days only
+      const days = duration || 1;
+      if (![1, 2, 3].includes(days)) {
+        return res.status(400).json({
+          success: false,
+          error: "Duration must be 1, 2, or 3 days only"
+        });
+      }
+
+      // IMPORTANT: Company products have seller_id = NULL
+      // This distinguishes them from seller products
+      // Use UTC timezone explicitly to avoid timezone issues
+      const result = await pool.query(
+        `INSERT INTO products 
+         (seller_id, title, description, images, image_url, starting_price, starting_bid, 
+          current_price, current_bid, status, auction_end_time, duration, category_id, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $6, $6, $6, 'pending', NULL, $7, $8, (NOW() AT TIME ZONE 'UTC'), (NOW() AT TIME ZONE 'UTC')) 
+         RETURNING 
+           id, seller_id, title, description, images, image_url, starting_price, starting_bid,
+           current_price, current_bid, status, auction_end_time, duration, category_id,
+           created_at AT TIME ZONE 'UTC' as created_at,
+           updated_at AT TIME ZONE 'UTC' as updated_at`,
+        [
+          null, // seller_id = NULL for company products
+          title, 
+          description || null, 
+          JSON.stringify(imagesArray), // images as JSONB
+          imagesArray[0] || null, // image_url for backward compatibility
+          startingPrice, 
+          days, // duration: 1, 2, or 3
+          category_id // Required - already validated above
+        ]
+      );
+
+      // Ensure created_at timestamp is current and properly formatted (UTC ISO string)
+      const product = result.rows[0];
+      // Convert PostgreSQL timestamp to ISO string (UTC) for consistent frontend parsing
+      if (product.created_at) {
+        const timestamp = new Date(product.created_at);
+        product.created_at = timestamp.toISOString();
+      }
+      if (product.updated_at) {
+        const timestamp = new Date(product.updated_at);
+        product.updated_at = timestamp.toISOString();
+      }
+
+      console.log('✅ [AdminCreateProduct] Company product created successfully:', {
+        productId: product.id,
+        sellerId: product.seller_id, // Should be NULL
+        imagesCount: imagesArray.length,
+        createdBy: userRole,
+        createdAt: product.created_at
+      });
+
+      // Create notification for admin about new company product pending approval (parallel for speed)
+      // Don't await - run in background to not slow down response
+      (async () => {
+        try {
+          // Get admin users (excluding the creator if they're an admin)
+          const adminResult = await pool.query(
+            "SELECT id FROM users WHERE role IN ('admin', 'superadmin', 'moderator') AND id != $1",
+            [req.user.id]
+          );
+          
+          if (adminResult.rows.length === 0) {
+            return; // No admins to notify
+          }
+          
+          // Create notifications in parallel (much faster!)
+          const notificationPromises = adminResult.rows.map(admin => {
+            return pool.query(
+              `INSERT INTO notifications (title, message, user_id, type, is_read, created_at)
+               VALUES ($1, $2, $3, $4, false, CURRENT_TIMESTAMP)`,
+              [
+                'New Company Product Pending Approval',
+                `New company product "${title}" is waiting for approval (created by ${req.user.name || userRole})`,
+                admin.id,
+                'product'
+              ]
+            ).catch(notifError => {
+              // If column doesn't exist, try without type and title
+              if (notifError.code === '42703' || notifError.message.includes('column')) {
+                return pool.query(
+                  `INSERT INTO notifications (message, user_id, is_read, created_at)
+                   VALUES ($1, $2, false, CURRENT_TIMESTAMP)`,
+                  [
+                    `New company product "${title}" is waiting for approval (created by ${req.user.name || userRole})`,
+                    admin.id
+                  ]
+                );
+              }
+              // Silently fail individual notifications
+              console.warn(`⚠️ [AdminCreateProduct] Failed to notify admin ${admin.id}:`, notifError.message);
+            });
+          });
+          
+          await Promise.all(notificationPromises);
+          console.log('✅ [AdminCreateProduct] Notifications created for admins (parallel)');
+        } catch (notifError) {
+          // Don't fail product creation if notification fails
+          console.log('⚠️ [AdminCreateProduct] Failed to create notifications:', notifError.message);
+        }
+      })();
+
+      res.status(201).json({
+        success: true,
+        message: "Company product created successfully and pending approval",
+        product: product
+      });
+    } catch (error) {
+      console.error("❌ [AdminCreateProduct] Error:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message || "Internal server error"
+      });
+    }
+  },
+
   // DELETE /admin/products/:id - Delete product (Super Admin or Employee)
   async deleteProduct(req, res) {
     try {
@@ -839,32 +1106,28 @@ export const ProductController = {
         });
       }
 
-      // FIX: Skip product_type check to prevent errors if column missing
-      // Employee can only delete company products
-      // if (userRole === 'employee') {
-      //   const productCheck = await pool.query(
-      //     "SELECT product_type FROM products WHERE id = $1",
-      //     [id]
-      //   );
-      //   if (productCheck.rows.length === 0) {
-      //     return res.status(404).json({
-      //       success: false,
-      //       error: "Product not found"
-      //     });
-      //   }
-      //   if (productCheck.rows[0].product_type !== 'company_product') {
-      //     return res.status(403).json({
-      //       success: false,
-      //       error: "Employee can only delete company products"
-      //     });
-      //   }
-      // }
-
-      // Check if product exists
+      // Check if product exists and get seller_id
       const productCheck = await pool.query(
-        "SELECT id, title FROM products WHERE id = $1",
+        "SELECT id, title, seller_id FROM products WHERE id = $1",
         [id]
       );
+
+      if (productCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Product not found"
+        });
+      }
+
+      // Employee can only delete company products (seller_id = NULL)
+      if (userRole === 'employee') {
+        if (productCheck.rows[0].seller_id !== null) {
+          return res.status(403).json({
+            success: false,
+            error: "Employee can only delete company products (not seller products)"
+          });
+        }
+      }
 
       if (productCheck.rows.length === 0) {
         return res.status(404).json({

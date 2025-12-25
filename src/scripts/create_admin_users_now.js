@@ -1,9 +1,11 @@
 /**
  * Create Admin Users NOW - Immediate fix for admin login
  * This script creates all required admin users in the database
+ * Also sets password for Superadmin (required for special endpoint)
  */
 
 import pool from "../config/db.js";
+import bcrypt from "bcrypt";
 
 async function createAdminUsers() {
   try {
@@ -12,13 +14,13 @@ async function createAdminUsers() {
     
     const adminUsers = [
       {
-        phone: '+9647500914000',
+        phone: '+9647500914000',  // Superadmin phone (fixed)
         role: 'superadmin',
         name: 'Super Admin',
         email: 'superadmin@bidmaster.com'
       },
       {
-        phone: '+9647800914000',
+        phone: '+9647800914000',  // Moderator phone (fixed)
         role: 'moderator',
         name: 'Moderator',
         email: 'moderator@bidmaster.com'
@@ -40,29 +42,73 @@ async function createAdminUsers() {
         const existing = checkResult.rows[0];
         console.log(`   ⚠️  User exists with role: ${existing.role}`);
         
-        // Update if role is wrong
-        if (existing.role !== adminUser.role) {
+        // Update if role is wrong OR if Superadmin has no password
+        const needsUpdate = existing.role !== adminUser.role;
+        const needsPassword = adminUser.role === 'superadmin' && !existing.password;
+        
+        if (needsUpdate || needsPassword) {
+          let updateFields = [];
+          let updateValues = [];
+          let paramCount = 1;
+          
+          if (needsUpdate) {
+            updateFields.push(`role = $${paramCount++}`);
+            updateValues.push(adminUser.role);
+          }
+          
+          updateFields.push(`name = $${paramCount++}`);
+          updateValues.push(adminUser.name);
+          
+          updateFields.push(`email = $${paramCount++}`);
+          updateValues.push(adminUser.email);
+          
+          updateFields.push(`status = 'approved'`);
+          updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+          
+          // Set password if Superadmin has no password
+          if (needsPassword) {
+            const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123';
+            const passwordHash = await bcrypt.hash(defaultPassword, 10);
+            updateFields.push(`password = $${paramCount++}`);
+            updateValues.push(passwordHash);
+            console.log(`   🔐 Setting password for Superadmin (default: ${defaultPassword})`);
+            console.log(`   💡 To change password, update ADMIN_PASSWORD in .env and run this script again`);
+          }
+          
+          updateValues.push(adminUser.phone); // For WHERE clause
+          
           await pool.query(
             `UPDATE users 
-             SET role = $1, 
-                 name = $2,
-                 email = $3,
-                 status = 'approved',
-                 updated_at = CURRENT_TIMESTAMP 
-             WHERE phone = $4`,
-            [adminUser.role, adminUser.name, adminUser.email, adminUser.phone]
+             SET ${updateFields.join(', ')}
+             WHERE phone = $${paramCount}`,
+            updateValues
           );
-          console.log(`   ✅ Updated role to: ${adminUser.role}`);
+          
+          if (needsUpdate) {
+            console.log(`   ✅ Updated role to: ${adminUser.role}`);
+          }
+          if (needsPassword) {
+            console.log(`   ✅ Password set for Superadmin`);
+          }
         } else {
           console.log(`   ✅ Role is correct, no update needed`);
         }
       } else {
         // Create new user
+        // For Superadmin, also set password (required for special endpoint)
+        let passwordHash = null;
+        if (adminUser.role === 'superadmin') {
+          const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123';
+          passwordHash = await bcrypt.hash(defaultPassword, 10);
+          console.log(`   🔐 Setting password for Superadmin (default: ${defaultPassword})`);
+          console.log(`   💡 To change password, update ADMIN_PASSWORD in .env and run this script again`);
+        }
+        
         const insertResult = await pool.query(
-          `INSERT INTO users (name, email, phone, role, status, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, 'approved', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `INSERT INTO users (name, email, phone, role, status, password, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'approved', $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
            RETURNING id, name, phone, role, status`,
-          [adminUser.name, adminUser.email, adminUser.phone, adminUser.role]
+          [adminUser.name, adminUser.email, adminUser.phone, adminUser.role, passwordHash]
         );
         
         const newUser = insertResult.rows[0];

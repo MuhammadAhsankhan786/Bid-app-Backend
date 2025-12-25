@@ -145,6 +145,70 @@ export const NotificationsController = {
         message: "Internal server error"
       });
     }
+  },
+
+  // GET /api/notifications/settings
+  async getSettings(req, res) {
+    try {
+      const userId = req.user.id;
+      const result = await pool.query(
+        "SELECT notification_preferences FROM users WHERE id = $1",
+        [userId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Default settings if null
+      const defaultSettings = {
+        email_notifications: true,
+        product_approvals: true,
+        user_reports: true,
+        high_value_bids: true,
+        system_updates: true,
+        security_alerts: true
+      };
+
+      res.json({
+        success: true,
+        data: result.rows[0].notification_preferences || defaultSettings
+      });
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
+  },
+
+  // PUT /api/notifications/settings
+  async updateSettings(req, res) {
+    try {
+      const userId = req.user.id;
+      const settings = req.body;
+
+      // Merge with existing settings or defaults
+      const currentResult = await pool.query(
+        "SELECT notification_preferences FROM users WHERE id = $1",
+        [userId]
+      );
+
+      const currentSettings = currentResult.rows[0]?.notification_preferences || {};
+      const newSettings = { ...currentSettings, ...settings };
+
+      const result = await pool.query(
+        "UPDATE users SET notification_preferences = $1 WHERE id = $2 RETURNING notification_preferences",
+        [newSettings, userId]
+      );
+
+      res.json({
+        success: true,
+        message: "Notification settings updated",
+        data: result.rows[0].notification_preferences
+      });
+    } catch (error) {
+      console.error("Error updating settings:", error);
+      res.status(500).json({ success: false, message: "Internal server error" });
+    }
   }
 };
 

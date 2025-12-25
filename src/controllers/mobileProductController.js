@@ -1,5 +1,6 @@
 import pool from "../config/db.js";
 import { fixImageUrlsInResponse, fixImageUrlInItem } from "../utils/imageUrlFixer.js";
+import { notifyAdmins } from "../utils/notificationUtils.js";
 
 export const MobileProductController = {
   // POST /api/products/create
@@ -111,12 +112,12 @@ export const MobileProductController = {
          VALUES ($1, $2, $3, $4, $5, $6, $6, $6, $6, 'pending', NULL, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) 
          RETURNING *`,
         [
-          sellerId, 
-          title, 
-          description || null, 
+          sellerId,
+          title,
+          description || null,
           JSON.stringify(imagesArray), // images as JSONB
           imagesArray[0] || null, // image_url for backward compatibility
-          startingPrice, 
+          startingPrice,
           days, // duration: 1, 2, or 3
           category_id // Required - already validated above
         ]
@@ -126,6 +127,14 @@ export const MobileProductController = {
         productId: result.rows[0].id,
         imagesCount: imagesArray.length
       });
+
+      // Create notification for admin about new product pending approval
+      await notifyAdmins(
+        'New Product Pending Approval',
+        `New product "${title}" is waiting for approval`,
+        'product',
+        result.rows[0].id
+      );
 
       res.status(201).json({
         success: true,
@@ -146,7 +155,7 @@ export const MobileProductController = {
     try {
       console.log('📦 GET /api/products/mine - Request received');
       console.log('   Headers:', JSON.stringify(req.headers, null, 2));
-      
+
       // Check if user is authenticated
       if (!req.user || !req.user.id) {
         console.error('❌ Authentication error: req.user is missing');
@@ -227,7 +236,7 @@ export const MobileProductController = {
       console.error("   Error message:", error.message);
       console.error("   Error code:", error.code);
       console.error("   Error stack:", error.stack);
-      
+
       // Return more specific error messages
       let errorMessage = "Internal server error";
       if (error.code === '42703') {
@@ -237,7 +246,7 @@ export const MobileProductController = {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       res.status(500).json({
         success: false,
         message: errorMessage,
@@ -260,7 +269,7 @@ export const MobileProductController = {
     try {
       console.log('📦 GET /api/products - Request received');
       console.log('   Query params:', req.query);
-      
+
       // Check database connection
       try {
         const connectionTest = await pool.query('SELECT NOW() as current_time');
@@ -292,6 +301,9 @@ export const MobileProductController = {
         LEFT JOIN categories c ON p.category_id = c.id
         LEFT JOIN users buyer ON p.highest_bidder_id = buyer.id
         WHERE p.status = 'approved'
+          AND p.auction_end_time IS NOT NULL
+          AND p.auction_end_time > NOW()
+          AND p.seller_id IS NULL
       `;
       const params = [];
       let paramCount = 1;
@@ -325,7 +337,7 @@ export const MobileProductController = {
 
       const result = await pool.query(query, params);
       console.log(`✅ Query executed: Found ${result.rows.length} products`);
-      
+
       // If no products found, log suggestion to seed data
       if (result.rows.length === 0) {
         console.log('⚠️  No approved products found in database');
@@ -338,6 +350,9 @@ export const MobileProductController = {
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.status = 'approved'
+          AND p.auction_end_time IS NOT NULL
+          AND p.auction_end_time > NOW()
+          AND p.seller_id IS NULL
       `;
       const countParams = [];
       let countParamCount = 1;
@@ -372,7 +387,7 @@ export const MobileProductController = {
 
       // Fix invalid image URLs in response
       const fixedData = fixImageUrlsInResponse(result.rows);
-      
+
       const response = {
         success: true,
         data: fixedData,
@@ -389,7 +404,7 @@ export const MobileProductController = {
         productsCount: response.data.length,
         pagination: response.pagination
       });
-      
+
       // Log sample product with current_bid verification
       if (result.rows.length > 0) {
         const sampleProduct = result.rows[0];
@@ -401,7 +416,7 @@ export const MobileProductController = {
         console.log(`      Status: ${sampleProduct.status}`);
         console.log(`      Seller: ${sampleProduct.seller_name || 'N/A'}`);
         console.log(`      Category: ${sampleProduct.category_name || 'N/A'}`);
-        
+
         // Log full JSON structure for verification
         console.log('   Full product JSON (with current_bid):');
         console.log(JSON.stringify(sampleProduct, null, 2));
@@ -415,7 +430,7 @@ export const MobileProductController = {
       console.error("   Error message:", error.message);
       console.error("   Error code:", error.code);
       console.error("   Error stack:", error.stack);
-      
+
       // Return more specific error messages
       let errorMessage = "Internal server error";
       if (error.code === '42703') {
@@ -425,7 +440,7 @@ export const MobileProductController = {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       res.status(500).json({
         success: false,
         message: errorMessage,

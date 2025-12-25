@@ -11,17 +11,17 @@ export const verifyAdmin = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     // Verify scope is "admin" for admin routes (backward compatible: allow tokens without scope)
     const tokenScope = decoded.scope;
     if (tokenScope && tokenScope !== 'admin') {
       console.log('⚠️ [verifyAdmin] Invalid scope for admin route:', tokenScope);
-      return res.status(403).json({ 
-        message: "This token is not valid for admin panel. Please use admin panel login." 
+      return res.status(403).json({
+        message: "This token is not valid for admin panel. Please use admin panel login."
       });
     }
     // If scope is undefined/null, allow for backward compatibility (old tokens)
-    
+
     // Check if user exists and is admin (for phone-based auth, we need to verify user exists)
     if (decoded.phone) {
       // Phone-based authentication - verify user exists
@@ -29,7 +29,7 @@ export const verifyAdmin = async (req, res, next) => {
         "SELECT id, phone, role FROM users WHERE phone = $1",
         [decoded.phone]
       );
-      
+
       if (userResult.rows.length === 0) {
         // Create admin user if doesn't exist (for OTP login)
         // Handle conflicts gracefully - try insert, fallback to select if conflict
@@ -92,7 +92,7 @@ export const verifyAdmin = async (req, res, next) => {
     } else {
       return res.status(401).json({ message: "Invalid token" });
     }
-    
+
     next();
   } catch (error) {
     // Only log non-expired token errors (expired tokens are expected)
@@ -119,10 +119,10 @@ export const verifyUser = async (req, res, next) => {
     // 🔍 DEEP TRACE: Log incoming token
     console.log('🔍 [DEEP TRACE] verifyUser middleware - INCOMING TOKEN');
     console.log('   Token preview:', token.substring(0, 50) + '...');
-    
+
     // Use token utility to verify access token
     const decoded = verifyAccessToken(token);
-    
+
     // 🔍 DEEP TRACE: Log decoded token
     if (decoded) {
       console.log('   🔍 Decoded Token Payload:');
@@ -132,36 +132,37 @@ export const verifyUser = async (req, res, next) => {
       console.log('      Scope (from token):', decoded.scope);
       console.log('      Expired:', decoded.expired);
     }
-    
+
     // Check if token is expired
     if (decoded && decoded.expired) {
-      return res.status(401).json({ 
-        success: false, 
+      return res.status(401).json({
+        success: false,
         error: "token_expired",
-        message: "Token expired" 
+        message: "Token expired"
       });
     }
-    
+
     if (!decoded) {
-      return res.status(401).json({ 
-        success: false, 
+      return res.status(401).json({
+        success: false,
         error: "invalid_token",
-        message: "Invalid token" 
+        message: "Invalid token"
       });
     }
 
     // Verify scope is "mobile" for mobile routes (backward compatible: allow tokens without scope)
+    // Also allow "admin" scope so admins can access shared routes (like notifications)
     const tokenScope = decoded.scope;
-    if (tokenScope && tokenScope !== 'mobile') {
+    if (tokenScope && tokenScope !== 'mobile' && tokenScope !== 'admin') {
       console.log('⚠️ [verifyUser] Invalid scope for mobile route:', tokenScope);
-      return res.status(403).json({ 
-        success: false, 
+      return res.status(403).json({
+        success: false,
         error: "invalid_scope",
-        message: "This token is not valid for mobile app. Please use mobile app login." 
+        message: "This token is not valid for mobile app. Please use mobile app login."
       });
     }
     // If scope is undefined/null, allow for backward compatibility (old tokens)
-    
+
     // Verify user exists in database
     let user;
     if (decoded.phone) {
@@ -171,10 +172,10 @@ export const verifyUser = async (req, res, next) => {
         [decoded.phone]
       );
       if (userResult.rows.length === 0) {
-        return res.status(401).json({ 
-          success: false, 
+        return res.status(401).json({
+          success: false,
           error: "user_not_found",
-          message: "User not found" 
+          message: "User not found"
         });
       }
       user = userResult.rows[0];
@@ -185,18 +186,18 @@ export const verifyUser = async (req, res, next) => {
         [decoded.id]
       );
       if (userResult.rows.length === 0) {
-        return res.status(401).json({ 
-          success: false, 
+        return res.status(401).json({
+          success: false,
           error: "user_not_found",
-          message: "User not found" 
+          message: "User not found"
         });
       }
       user = userResult.rows[0];
     } else {
-      return res.status(401).json({ 
-        success: false, 
+      return res.status(401).json({
+        success: false,
         error: "invalid_token_format",
-        message: "Invalid token format" 
+        message: "Invalid token format"
       });
     }
 
@@ -212,10 +213,10 @@ export const verifyUser = async (req, res, next) => {
 
     // Check if user is blocked
     if (user.status === 'blocked') {
-      return res.status(403).json({ 
-        success: false, 
+      return res.status(403).json({
+        success: false,
         error: "account_blocked",
-        message: "Account is blocked" 
+        message: "Account is blocked"
       });
     }
 
@@ -228,16 +229,16 @@ export const verifyUser = async (req, res, next) => {
     }
     // Return appropriate error message
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
-        success: false, 
+      return res.status(401).json({
+        success: false,
         error: "token_expired",
-        message: "Token expired" 
+        message: "Token expired"
       });
     }
-    res.status(401).json({ 
-      success: false, 
+    res.status(401).json({
+      success: false,
       error: "invalid_token",
-      message: "Invalid or expired token" 
+      message: "Invalid or expired token"
     });
   }
 };

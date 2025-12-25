@@ -199,6 +199,88 @@ export const AuthController = {
         });
       }
 
+      // Special handling for employee role - can login with any Iraq phone number
+      if (normalizedRole === 'employee') {
+        // Check if user exists, if not create employee user
+        const employeeResult = await pool.query(
+          `SELECT id, name, email, phone, role, status 
+           FROM users 
+           WHERE phone = $1`,
+          [normalizedPhone]
+        );
+        
+        let employeeUser;
+        if (employeeResult.rows.length === 0) {
+          // Create employee user if doesn't exist
+          const employeeEmail = `employee${normalizedPhone.replace(/\+/g, '')}@bidmaster.com`;
+          const insertResult = await pool.query(
+            `INSERT INTO users (name, email, phone, role, status, created_at)
+             VALUES ($1, $2, $3, 'employee', 'approved', CURRENT_TIMESTAMP)
+             ON CONFLICT (phone) DO UPDATE SET
+               role = 'employee',
+               status = 'approved'
+             RETURNING id, name, email, phone, role, status`,
+            [`Employee ${normalizedPhone}`, employeeEmail, normalizedPhone]
+          );
+          
+          employeeUser = insertResult.rows[0];
+          console.log(`✅ Employee user auto-created: ${normalizedPhone}`);
+        } else {
+          employeeUser = employeeResult.rows[0];
+          
+          // Update existing user to employee role if needed
+          if (employeeUser.role !== 'employee') {
+            await pool.query(
+              `UPDATE users SET role = 'employee' WHERE id = $1`,
+              [employeeUser.id]
+            );
+            employeeUser.role = 'employee';
+          }
+        }
+        
+        // Check if user is blocked
+        if (employeeUser.status === 'blocked') {
+          return res.status(403).json({ 
+            success: false, 
+            message: "Account is blocked" 
+          });
+        }
+        
+        // Generate tokens
+        const tokenPayload = { 
+          id: employeeUser.id, 
+          phone: employeeUser.phone, 
+          role: 'employee',
+          scope: 'admin'
+        };
+        const accessToken = generateAccessToken(tokenPayload);
+        const refreshToken = generateRefreshToken(tokenPayload);
+        
+        await pool.query(
+          "UPDATE users SET refresh_token = $1 WHERE id = $2",
+          [refreshToken, employeeUser.id]
+        );
+        
+        console.log('✅ Employee login successful (any Iraq number)');
+        
+        return res.json({
+          success: true,
+          message: "Login successful",
+          accessToken,
+          refreshToken,
+          token: accessToken,
+          role: 'employee',
+          user: {
+            id: employeeUser.id,
+            name: employeeUser.name,
+            email: employeeUser.email,
+            phone: employeeUser.phone,
+            role: 'employee',
+            status: employeeUser.status
+          }
+        });
+      }
+
       // Check if user exists in database with matching phone and role
       // Also try normalized version of original phone (handles spaces)
       const originalNormalized = normalizeIraqPhone(phone);
