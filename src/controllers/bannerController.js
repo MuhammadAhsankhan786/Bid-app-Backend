@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import jwt from "jsonwebtoken";
 import { uploadToCloudinary, isConfigured as isCloudinaryConfigured } from "../config/cloudinary.js";
 
 export const BannerController = {
@@ -10,11 +11,11 @@ export const BannerController = {
       // Check if user is admin by verifying token (but don't fail if no token - it's a public route)
       let isAdmin = false;
       const token = req.headers.authorization?.split(" ")[1];
-      
+
       if (token && process.env.JWT_SECRET) {
         try {
-          const jwt = await import("jsonwebtoken");
-          const decoded = jwt.default.verify(token, process.env.JWT_SECRET);
+          // const jwt = await import("jsonwebtoken");
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
           // Check if token has admin scope or user has admin role
           if (decoded && (decoded.scope === 'admin' || ['admin', 'superadmin', 'moderator', 'viewer'].includes(decoded.role?.toLowerCase()))) {
             isAdmin = true;
@@ -26,7 +27,7 @@ export const BannerController = {
           // Silently ignore token errors for public routes
         }
       }
-      
+
       let query;
       if (isAdmin) {
         // Admin can see all banners (including inactive)
@@ -122,7 +123,7 @@ export const BannerController = {
       // If image file is uploaded, upload to Cloudinary
       if (req.file) {
         const useCloudinary = isCloudinaryConfigured();
-        
+
         if (useCloudinary) {
           try {
             const uploadResult = await uploadToCloudinary(req.file.buffer, {
@@ -216,7 +217,7 @@ export const BannerController = {
       // If new image file is uploaded, upload to Cloudinary
       if (req.file) {
         const useCloudinary = isCloudinaryConfigured();
-        
+
         if (useCloudinary) {
           try {
             const uploadResult = await uploadToCloudinary(req.file.buffer, {
