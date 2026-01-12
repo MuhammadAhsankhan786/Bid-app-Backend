@@ -623,17 +623,35 @@ export const AuthController = {
       // SEND OTP USING TWILIO VERIFY API
       // ============================================================
       try {
-        await TwilioService.sendOTP(normalizedPhone);
+        const result = await TwilioService.sendOTP(normalizedPhone);
         console.log(`✅ OTP sent successfully to ${normalizedPhone} via Twilio Verify`);
+        
+        // If message was accepted by Twilio (even if delivery pending), return success
+        // OTP is stored in DB and can be verified
+        if (result.success) {
+          console.log(`✅ OTP stored in database. Message Status: ${result.status || 'N/A'}`);
+        }
       } catch (error) {
         console.error(`❌ Failed to send OTP via Twilio Verify:`, error.message);
+
+        // For 30008 (delivery issues), still allow OTP verification
+        // OTP is stored in DB even if SMS delivery fails
+        if (error.message.includes('30008') || error.message.includes('delayed')) {
+          // Return success with warning - OTP is stored and can be verified
+          return res.json({
+            success: true,
+            message: 'OTP code generated. Please check your phone. If SMS is delayed, you can still verify with the code when you receive it.',
+            warning: 'SMS delivery may be delayed'
+          });
+        }
 
         // Return appropriate status code based on error type
         // 60238 (blocked) should be 400 or 403, generic errors 500
         const isClientError = error.message.includes('not found') ||
           error.message.includes('not configured') ||
           error.message.includes('blocked') ||
-          error.message.includes('verified');
+          error.message.includes('verified') ||
+          error.message.includes('Invalid phone');
 
         const statusCode = isClientError ? 400 : 500;
 

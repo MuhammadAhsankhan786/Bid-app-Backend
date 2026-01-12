@@ -94,21 +94,84 @@ export const TwilioService = {
         // If generic error, we might fail on create.
       }
 
-      const message = await twilioClient.messages.create({
-        body: `Your BidMaster verification code is: ${code}`,
-        to: normalizedPhone,
-        ...fromParams
-      });
+      // Try sending with retry mechanism
+      let message = null;
+      let lastError = null;
+      const maxRetries = 2;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 1) {
+            console.log(`[CUSTOM OTP] Retry attempt ${attempt}/${maxRetries}...`);
+            // Wait 1 second before retry
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+          message = await twilioClient.messages.create({
+            body: `Your BidMaster verification code is: ${code}`,
+            to: normalizedPhone,
+            ...fromParams
+          });
 
-      console.log(`[CUSTOM OTP] SMS Sent! SID: ${message.sid}`);
+          console.log(`[CUSTOM OTP] SMS Sent! SID: ${message.sid}, Status: ${message.status}`);
+          
+          // If message is accepted/sent/queued, consider it success
+          // Don't wait for delivery confirmation as it may take time
+          if (message.status === 'accepted' || 
+              message.status === 'sent' || 
+              message.status === 'queued' ||
+              message.status === 'sending') {
+            console.log(`[CUSTOM OTP] Message accepted by Twilio (Status: ${message.status})`);
+            break; // Success, exit retry loop
+          }
+          
+        } catch (error) {
+          lastError = error;
+          console.warn(`[CUSTOM OTP] Attempt ${attempt} failed:`, error.message);
+          
+          // If it's a permanent error, don't retry
+          if (error.code === 21211 || error.code === 21212 || error.code === 21608) {
+            throw error; // Don't retry for invalid number or unverified number
+          }
+          
+          // If last attempt, throw the error
+          if (attempt === maxRetries) {
+            throw error;
+          }
+        }
+      }
 
-      return {
-        success: true,
-        message: 'OTP sent successfully (via SMS)'
-      };
+      // If we have a message with SID, consider it successful
+      // Even if delivery is pending, the OTP is stored in DB and can be verified
+      if (message && message.sid) {
+        return {
+          success: true,
+          message: 'OTP sent successfully (via SMS)',
+          messageSid: message.sid,
+          status: message.status
+        };
+      }
+
+      // If we reach here, something went wrong
+      throw lastError || new Error('Failed to send SMS after retries');
 
     } catch (error) {
       console.error(`[CUSTOM OTP ERROR] Failed to send to ${normalizedPhone}:`, error.message);
+      console.error(`[CUSTOM OTP ERROR] Error code: ${error.code}`);
+
+      // Check if OTP was stored in DB (even if SMS failed)
+      // This allows user to verify OTP if they received it via other means
+      try {
+        const checkCode = await pool.query(
+          'SELECT code FROM verification_codes WHERE phone = $1',
+          [normalizedPhone]
+        );
+        if (checkCode.rows.length > 0) {
+          console.log(`[CUSTOM OTP] OTP code stored in DB (can still be verified): ${checkCode.rows[0].code}`);
+        }
+      } catch (dbError) {
+        console.warn('[CUSTOM OTP] Could not check stored OTP:', dbError.message);
+      }
 
       // Map to friendly errors
       if (error.code === 21608) {
@@ -119,7 +182,9 @@ export const TwilioService = {
 
       // Provide more user-friendly error messages
       if (error.code === 30008) {
-        throw new Error('Unable to deliver SMS to this number. Please check your phone number or contact support.');
+        // For 30008 (carrier blocking), still return success if OTP is stored
+        // User can verify OTP if they received it
+        throw new Error('SMS delivery may be delayed. Please check your phone. If you received the code, you can still verify it.');
       } else if (error.code === 21211 || error.code === 21212) {
         throw new Error('Invalid phone number format. Please check and try again.');
       } else {
