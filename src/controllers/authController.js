@@ -10,10 +10,10 @@ import { generateAccessToken, generateRefreshToken } from "../utils/tokenUtils.j
  */
 function normalizeIraqPhone(phone) {
   if (!phone) return null;
-  
+
   // Remove spaces and special characters except +
   let cleaned = phone.replace(/[\s-]/g, '');
-  
+
   // Fix double +964 issue (e.g., +964964770091400 → +9647700914000)
   if (cleaned.startsWith('+964964')) {
     cleaned = '+964' + cleaned.substring(7); // Remove '+964964' (7 chars), keep rest
@@ -34,7 +34,7 @@ function normalizeIraqPhone(phone) {
   else if (!cleaned.startsWith('+964')) {
     return null;
   }
-  
+
   return cleaned;
 }
 
@@ -46,7 +46,7 @@ function normalizeIraqPhone(phone) {
 function isValidIraqPhone(phone) {
   const normalized = normalizeIraqPhone(phone);
   if (!normalized) return false;
-  
+
   // Iraq phone format: +964 followed by 9-10 digits
   const phoneRegex = /^\+964[0-9]{9,10}$/;
   return phoneRegex.test(normalized);
@@ -79,31 +79,31 @@ export const AuthController = {
 
       if (!phone || !role) {
         console.log('❌ Missing phone or role:', { phone: !!phone, role: !!role });
-        return res.status(400).json({ 
-          success: false, 
-          message: "Phone number and role are required" 
+        return res.status(400).json({
+          success: false,
+          message: "Phone number and role are required"
         });
       }
 
       // Normalize phone first
       const normalizedPhone = normalizeIraqPhone(phone);
       console.log('📱 Phone normalization:', { original: phone, normalized: normalizedPhone });
-      
+
       // Validate phone format
       if (!normalizedPhone) {
         console.log('❌ Phone normalization failed:', { original: phone });
-        return res.status(400).json({ 
-          success: false, 
-          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        return res.status(400).json({
+          success: false,
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}`
         });
       }
-      
+
       // Validate normalized phone format
       if (!isValidIraqPhone(phone)) {
         console.log('❌ Invalid phone format:', { original: phone, normalized: normalizedPhone });
-        return res.status(400).json({ 
-          success: false, 
-          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        return res.status(400).json({
+          success: false,
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}`
         });
       }
 
@@ -111,12 +111,12 @@ export const AuthController = {
       const normalizedRole = role.toLowerCase();
       const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer', 'employee'];
       if (!adminRoles.includes(normalizedRole)) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: `Invalid role. Must be one of: ${adminRoles.join(', ')}` 
+          message: `Invalid role. Must be one of: ${adminRoles.join(', ')}`
         });
       }
-      
+
       // Special handling for viewer role - can login with any Iraq phone number
       if (normalizedRole === 'viewer') {
         // Check if user exists, if not create viewer user
@@ -126,7 +126,7 @@ export const AuthController = {
            WHERE phone = $1`,
           [normalizedPhone]
         );
-        
+
         let viewerUser;
         if (viewerResult.rows.length === 0) {
           // Create viewer user if doesn't exist
@@ -140,12 +140,12 @@ export const AuthController = {
              RETURNING id, name, email, phone, role, status`,
             [`Viewer ${normalizedPhone}`, viewerEmail, normalizedPhone]
           );
-          
+
           viewerUser = insertResult.rows[0];
           console.log(`✅ Viewer user auto-created: ${normalizedPhone}`);
         } else {
           viewerUser = viewerResult.rows[0];
-          
+
           // Update existing user to viewer role if needed
           if (viewerUser.role !== 'viewer') {
             await pool.query(
@@ -155,32 +155,32 @@ export const AuthController = {
             viewerUser.role = 'viewer';
           }
         }
-        
+
         // Check if user is blocked
         if (viewerUser.status === 'blocked') {
-          return res.status(403).json({ 
-            success: false, 
-            message: "Account is blocked" 
+          return res.status(403).json({
+            success: false,
+            message: "Account is blocked"
           });
         }
-        
+
         // Generate tokens
-        const tokenPayload = { 
-          id: viewerUser.id, 
-          phone: viewerUser.phone, 
+        const tokenPayload = {
+          id: viewerUser.id,
+          phone: viewerUser.phone,
           role: 'viewer',
           scope: 'admin'
         };
         const accessToken = generateAccessToken(tokenPayload);
         const refreshToken = generateRefreshToken(tokenPayload);
-        
+
         await pool.query(
           "UPDATE users SET refresh_token = $1 WHERE id = $2",
           [refreshToken, viewerUser.id]
         );
-        
+
         console.log('✅ Viewer login successful (any Iraq number)');
-        
+
         return res.json({
           success: true,
           message: "Login successful",
@@ -208,7 +208,7 @@ export const AuthController = {
            WHERE phone = $1`,
           [normalizedPhone]
         );
-        
+
         let employeeUser;
         if (employeeResult.rows.length === 0) {
           // Create employee user if doesn't exist
@@ -222,12 +222,12 @@ export const AuthController = {
              RETURNING id, name, email, phone, role, status`,
             [`Employee ${normalizedPhone}`, employeeEmail, normalizedPhone]
           );
-          
+
           employeeUser = insertResult.rows[0];
           console.log(`✅ Employee user auto-created: ${normalizedPhone}`);
         } else {
           employeeUser = employeeResult.rows[0];
-          
+
           // Update existing user to employee role if needed
           if (employeeUser.role !== 'employee') {
             await pool.query(
@@ -237,32 +237,32 @@ export const AuthController = {
             employeeUser.role = 'employee';
           }
         }
-        
+
         // Check if user is blocked
         if (employeeUser.status === 'blocked') {
-          return res.status(403).json({ 
-            success: false, 
-            message: "Account is blocked" 
+          return res.status(403).json({
+            success: false,
+            message: "Account is blocked"
           });
         }
-        
+
         // Generate tokens
-        const tokenPayload = { 
-          id: employeeUser.id, 
-          phone: employeeUser.phone, 
+        const tokenPayload = {
+          id: employeeUser.id,
+          phone: employeeUser.phone,
           role: 'employee',
           scope: 'admin'
         };
         const accessToken = generateAccessToken(tokenPayload);
         const refreshToken = generateRefreshToken(tokenPayload);
-        
+
         await pool.query(
           "UPDATE users SET refresh_token = $1 WHERE id = $2",
           [refreshToken, employeeUser.id]
         );
-        
+
         console.log('✅ Employee login successful (any Iraq number)');
-        
+
         return res.json({
           success: true,
           message: "Login successful",
@@ -284,7 +284,7 @@ export const AuthController = {
       // Check if user exists in database with matching phone and role
       // Also try normalized version of original phone (handles spaces)
       const originalNormalized = normalizeIraqPhone(phone);
-      
+
       // First try exact match with normalized phone and role
       let userResult = await pool.query(
         `SELECT id, name, email, phone, role, status 
@@ -292,7 +292,7 @@ export const AuthController = {
          WHERE phone = $1 AND role = $2`,
         [normalizedPhone, normalizedRole]
       );
-      
+
       // If not found, try with original phone format
       if (userResult.rows.length === 0 && phone !== normalizedPhone) {
         userResult = await pool.query(
@@ -302,7 +302,7 @@ export const AuthController = {
           [phone, normalizedRole]
         );
       }
-      
+
       // If still not found, try with originalNormalized
       if (userResult.rows.length === 0 && originalNormalized !== normalizedPhone) {
         userResult = await pool.query(
@@ -312,7 +312,7 @@ export const AuthController = {
           [originalNormalized, normalizedRole]
         );
       }
-      
+
       // Debug: Log what we're searching for
       console.log('🔍 Admin login search:', {
         normalizedPhone,
@@ -321,7 +321,7 @@ export const AuthController = {
         role: normalizedRole,
         found: userResult.rows.length > 0
       });
-      
+
       console.log('🔍 Database query:', {
         normalizedPhone,
         originalPhone: phone,
@@ -330,9 +330,9 @@ export const AuthController = {
       });
 
       if (userResult.rows.length === 0) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Phone number not found or role mismatch. Please check your credentials." 
+        return res.status(404).json({
+          success: false,
+          message: "Phone number not found or role mismatch. Please check your credentials."
         });
       }
 
@@ -340,9 +340,9 @@ export const AuthController = {
 
       // Check if user is blocked
       if (user.status === 'blocked') {
-        return res.status(403).json({ 
-          success: false, 
-          message: "Account is blocked" 
+        return res.status(403).json({
+          success: false,
+          message: "Account is blocked"
         });
       }
 
@@ -353,9 +353,9 @@ export const AuthController = {
       const scope = 'admin';
 
       // Generate access and refresh tokens with admin scope
-      const tokenPayload = { 
-        id: user.id, 
-        phone: user.phone, 
+      const tokenPayload = {
+        id: user.id,
+        phone: user.phone,
         role: userRole,
         scope: scope
       };
@@ -389,9 +389,9 @@ export const AuthController = {
       });
     } catch (error) {
       console.error("Error during admin login:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Internal server error" 
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
       });
     }
   },
@@ -416,31 +416,31 @@ export const AuthController = {
 
       if (!phone || !otp) {
         console.log('❌ Missing phone or OTP:', { phone: !!phone, otp: !!otp });
-        return res.status(400).json({ 
-          success: false, 
-          message: "Phone number and OTP are required" 
+        return res.status(400).json({
+          success: false,
+          message: "Phone number and OTP are required"
         });
       }
 
       // Normalize phone first
       const normalizedPhone = normalizeIraqPhone(phone);
       console.log('📱 Phone normalization:', { original: phone, normalized: normalizedPhone });
-      
+
       // Validate phone format
       if (!normalizedPhone) {
         console.log('❌ Phone normalization failed:', { original: phone });
-        return res.status(400).json({ 
-          success: false, 
-          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        return res.status(400).json({
+          success: false,
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}`
         });
       }
-      
+
       // Validate normalized phone format
       if (!isValidIraqPhone(phone)) {
         console.log('❌ Invalid phone format:', { original: phone, normalized: normalizedPhone });
-        return res.status(400).json({ 
-          success: false, 
-          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        return res.status(400).json({
+          success: false,
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}`
         });
       }
 
@@ -449,20 +449,20 @@ export const AuthController = {
       // ============================================================
       try {
         const verificationResult = await TwilioService.verifyOTP(normalizedPhone, otp);
-        
+
         if (!verificationResult.success || verificationResult.status !== 'approved') {
-          return res.status(401).json({ 
-            success: false, 
-            message: verificationResult.message || 'Invalid OTP. Please check and try again.' 
+          return res.status(401).json({
+            success: false,
+            message: verificationResult.message || 'Invalid OTP. Please check and try again.'
           });
         }
-        
+
         console.log('✅ OTP verified successfully via Twilio Verify');
       } catch (error) {
         console.error('❌ Twilio Verify error:', error.message);
-        return res.status(401).json({ 
-          success: false, 
-          message: error.message || 'OTP verification failed. Please try again.' 
+        return res.status(401).json({
+          success: false,
+          message: error.message || 'OTP verification failed. Please try again.'
         });
       }
 
@@ -473,7 +473,7 @@ export const AuthController = {
          WHERE phone = $1 OR phone = $2`,
         [normalizedPhone, phone]
       );
-      
+
       console.log('🔍 Database query:', {
         normalizedPhone,
         originalPhone: phone,
@@ -481,9 +481,9 @@ export const AuthController = {
       });
 
       if (userResult.rows.length === 0) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Phone number not registered. Please contact administrator or register first." 
+        return res.status(404).json({
+          success: false,
+          message: "Phone number not registered. Please contact administrator or register first."
         });
       }
 
@@ -491,24 +491,24 @@ export const AuthController = {
 
       // Check if user is blocked
       if (user.status === 'blocked') {
-        return res.status(403).json({ 
-          success: false, 
-          message: "Account is blocked" 
+        return res.status(403).json({
+          success: false,
+          message: "Account is blocked"
         });
       }
 
       // For loginPhone endpoint (legacy), keep original role
       // Note: This endpoint is deprecated for admin panel, but may still be used
       let userRole = user.role?.toLowerCase();
-      
+
       // Determine scope based on user role: admin roles get "admin" scope, others get "mobile"
       const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer', 'employee'];
       const scope = adminRoles.includes(userRole) ? 'admin' : 'mobile';
 
       // Generate access and refresh tokens with appropriate scope
-      const tokenPayload = { 
-        id: user.id, 
-        phone: user.phone, 
+      const tokenPayload = {
+        id: user.id,
+        phone: user.phone,
         role: userRole,
         scope: scope
       };
@@ -540,9 +540,9 @@ export const AuthController = {
       });
     } catch (error) {
       console.error("Error during phone login:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Internal server error" 
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
       });
     }
   },
@@ -567,27 +567,27 @@ export const AuthController = {
     console.log("⚠️ SEND OTP ROUTE HIT");
     try {
       const { phone } = req.body;
-      
+
       // ============================================================
       // OTP BYPASS FOR DEVELOPMENT (OTP_BYPASS=true)
       // ============================================================
       const OTP_BYPASS = process.env.OTP_BYPASS === 'true';
-      
+
       if (OTP_BYPASS) {
         console.log('⚠️ OTP DISABLED — DEVELOPMENT MODE ACTIVE');
         console.log('   Skipping Twilio OTP send');
         console.log('   Phone:', phone);
-        
+
         if (!phone) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            message: "Phone number is required" 
+            message: "Phone number is required"
           });
         }
-        
+
         // Normalize phone for consistency
         const normalizedPhone = normalizeIraqPhone(phone);
-        
+
         // Return success with mock OTP (dev mode only)
         return res.json({
           success: true,
@@ -595,30 +595,30 @@ export const AuthController = {
           otp: "0000"
         });
       }
-      
+
       // 🔍 DEBUG: Log Twilio configuration
       console.log('🔍 [OTP SEND] Twilio Configuration Check:');
       console.log('   Using Twilio Service:', process.env.TWILIO_VERIFY_SID || 'NOT SET');
       console.log('   Using Twilio Account:', process.env.TWILIO_ACCOUNT_SID || 'NOT SET');
       console.log('   Twilio Auth Token:', process.env.TWILIO_AUTH_TOKEN ? 'SET (hidden)' : 'NOT SET');
-      
+
       if (!phone) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Phone number is required" 
+          message: "Phone number is required"
         });
       }
-      
+
       // Normalize and validate
       const normalizedPhone = normalizeIraqPhone(phone);
-      
+
       if (!isValidIraqPhone(phone)) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Invalid phone number format. Use Iraq format: +964XXXXXXXXXX" 
+          message: "Invalid phone number format. Use Iraq format: +964XXXXXXXXXX"
         });
       }
-      
+
       // ============================================================
       // SEND OTP USING TWILIO VERIFY API
       // ============================================================
@@ -627,16 +627,22 @@ export const AuthController = {
         console.log(`✅ OTP sent successfully to ${normalizedPhone} via Twilio Verify`);
       } catch (error) {
         console.error(`❌ Failed to send OTP via Twilio Verify:`, error.message);
-        
+
         // Return appropriate status code based on error type
-        const statusCode = error.message.includes('not found') || error.message.includes('not configured') ? 400 : 500;
-        
-        return res.status(statusCode).json({ 
+        // 60238 (blocked) should be 400 or 403, generic errors 500
+        const isClientError = error.message.includes('not found') ||
+          error.message.includes('not configured') ||
+          error.message.includes('blocked') ||
+          error.message.includes('verified');
+
+        const statusCode = isClientError ? 400 : 500;
+
+        return res.status(statusCode).json({
           success: false,
-          message: error.message || "Failed to send OTP. Please try again." 
+          message: error.message || "Failed to send OTP. Please try again."
         });
       }
-      
+
       // Return success response (DO NOT return OTP)
       res.json({
         success: true,
@@ -644,13 +650,13 @@ export const AuthController = {
       });
     } catch (error) {
       console.error("Error sending OTP:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: "Internal server error" 
+        message: "Internal server error"
       });
     }
   },
-  
+
   /**
    * POST /api/auth/verify-otp
    * 
@@ -671,34 +677,34 @@ export const AuthController = {
     try {
       console.log('🔍 [VERIFY OTP] Request received');
       console.log('   Body:', { phone: req.body?.phone, otp: req.body?.otp ? '***' : 'missing', referral_code: req.body?.referral_code || 'none' });
-      
+
       const { phone, otp, referral_code } = req.body;
-      
+
       if (!phone || !otp) {
         console.error('❌ [VERIFY OTP] Missing phone or OTP');
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Phone and OTP are required" 
+          message: "Phone and OTP are required"
         });
       }
-      
+
       // Normalize phone
       const normalizedPhone = normalizeIraqPhone(phone);
       console.log('📱 [VERIFY OTP] Phone normalization:', { original: phone, normalized: normalizedPhone });
-      
+
       if (!normalizedPhone) {
         console.error('❌ [VERIFY OTP] Invalid phone format');
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Invalid phone number format" 
+          message: "Invalid phone number format"
         });
       }
-      
+
       // ============================================================
       // OTP BYPASS FOR DEVELOPMENT (OTP_BYPASS=true)
       // ============================================================
       const OTP_BYPASS = process.env.OTP_BYPASS === 'true';
-      
+
       if (OTP_BYPASS) {
         console.log('⚠️ OTP DISABLED — DEVELOPMENT MODE ACTIVE');
         console.log('   Skipping Twilio OTP verification');
@@ -712,57 +718,57 @@ export const AuthController = {
         // ============================================================
         try {
           const verificationResult = await TwilioService.verifyOTP(normalizedPhone, otp);
-          
+
           if (!verificationResult.success || verificationResult.status !== 'approved') {
-            return res.status(401).json({ 
+            return res.status(401).json({
               success: false,
-              message: verificationResult.message || 'Invalid OTP. Please check and try again.' 
+              message: verificationResult.message || 'Invalid OTP. Please check and try again.'
             });
           }
-          
+
           console.log('✅ OTP verified successfully via Twilio Verify');
         } catch (error) {
           console.error('❌ Twilio Verify error:', error.message);
-          return res.status(401).json({ 
+          return res.status(401).json({
             success: false,
-            message: error.message || 'OTP verification failed. Please try again.' 
+            message: error.message || 'OTP verification failed. Please try again.'
           });
         }
       }
-      
+
       // Fetch user from database to get role
       // If user doesn't exist, auto-create a company_products user (similar to admin-login creating viewer)
       console.log('🔍 [VERIFY OTP] Checking database for user:', normalizedPhone);
-      
+
       let user;
       try {
         const userResult = await pool.query(
           "SELECT id, name, email, phone, role, status FROM users WHERE phone = $1",
           [normalizedPhone]
         );
-        
-        console.log('🔍 [VERIFY OTP] Database query result:', { 
+
+        console.log('🔍 [VERIFY OTP] Database query result:', {
           found: userResult.rows.length > 0,
-          userId: userResult.rows[0]?.id 
+          userId: userResult.rows[0]?.id
         });
-        
+
         if (userResult.rows.length === 0) {
           // Auto-create company_products user if doesn't exist (mobile app users are typically company_products)
           console.log('🔍 [VERIFY OTP] User not found, creating new company_products user');
           const userEmail = `company_products${normalizedPhone.replace(/\+/g, '')}@bidmaster.com`;
-          
+
           // ============================================================
           // REFERRAL SYSTEM: Handle referral code
           // ============================================================
           let referralCode = null;
           let referredBy = null;
           let referralTransactionId = null;
-          
+
           // Generate referral code for new user
           const { generateReferralCode } = await import("../utils/referralUtils.js");
           referralCode = await generateReferralCode();
           console.log(`✅ Generated referral code for new user: ${referralCode}`);
-          
+
           // Process referral if code provided
           if (referral_code && typeof referral_code === 'string' && referral_code.trim().length > 0) {
             const {
@@ -771,9 +777,9 @@ export const AuthController = {
               createReferralTransaction,
               getReferralRewardAmount
             } = await import("../utils/referralUtils.js");
-            
+
             const inviter = await findInviterByCode(referral_code.trim());
-            
+
             if (inviter) {
               // Check fraud protection
               const fraudCheck = await checkFraudProtection(
@@ -781,18 +787,18 @@ export const AuthController = {
                 normalizedPhone,
                 req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress
               );
-              
+
               if (fraudCheck.allowed) {
                 referredBy = inviter.referral_code;
                 const rewardAmount = await getReferralRewardAmount();
-                
+
                 console.log(`💰 [REFERRAL] Processing referral reward:`);
                 console.log(`   Inviter ID: ${inviter.id}`);
                 console.log(`   Inviter Name: ${inviter.name}`);
                 console.log(`   Inviter Code: ${inviter.referral_code}`);
                 console.log(`   Invitee Phone: ${normalizedPhone}`);
                 console.log(`   Reward Amount: $${rewardAmount}`);
-                
+
                 // Create referral transaction (pending status)
                 const transaction = await createReferralTransaction(
                   inviter.id,
@@ -800,7 +806,7 @@ export const AuthController = {
                   rewardAmount
                 );
                 referralTransactionId = transaction.id;
-                
+
                 console.log(`✅ Referral transaction created: ${transaction.id} for inviter ${inviter.id}`);
               } else {
                 console.log(`⚠️ Referral fraud check failed: ${fraudCheck.reason}`);
@@ -809,7 +815,7 @@ export const AuthController = {
               console.log(`⚠️ Invalid referral code provided: ${referral_code}`);
             }
           }
-          
+
           try {
             // Try INSERT first (if phone has unique constraint)
             const insertResult = await pool.query(
@@ -818,19 +824,19 @@ export const AuthController = {
                RETURNING id, name, email, phone, role, status, referral_code, referred_by`,
               [`Company Products ${normalizedPhone}`, userEmail, normalizedPhone, referralCode, referredBy]
             );
-            
+
             user = insertResult.rows[0];
             console.log(`✅ Company Products user auto-created via verifyOTP: ${normalizedPhone}`);
-            
+
             // ============================================================
             // REFERRAL SYSTEM: Award reward if referral transaction exists
             // ============================================================
             if (referralTransactionId && user.id) {
               const { awardReferralReward } = await import("../utils/referralUtils.js");
-              
+
               try {
                 const awardResult = await awardReferralReward(referralTransactionId, user.id);
-                
+
                 if (!awardResult.alreadyAwarded) {
                   console.log(`💰 [REFERRAL REWARD] Successfully awarded:`);
                   console.log(`   Amount: $${awardResult.transaction.amount}`);
@@ -847,7 +853,7 @@ export const AuthController = {
                 // Don't fail user creation if award fails - log and continue
               }
             }
-            
+
             // ============================================================
             // REFERRAL SYSTEM: Award $2 reward to referral user (invitee)
             // ============================================================
@@ -861,7 +867,7 @@ export const AuthController = {
                    RETURNING id, reward_balance`,
                   [user.id]
                 );
-                
+
                 if (referralUserRewardResult.rows.length > 0) {
                   console.log(`💰 [REFERRAL USER REWARD] Successfully awarded $2 to referral user:`);
                   console.log(`   Referral User ID: ${user.id}`);
@@ -902,42 +908,42 @@ export const AuthController = {
         console.error('   Error detail:', dbError.detail);
         throw dbError;
       }
-      
+
       // Check if user is blocked
       if (user.status === 'blocked') {
-        return res.status(403).json({ 
+        return res.status(403).json({
           success: false,
-          error: "Account is blocked" 
+          error: "Account is blocked"
         });
       }
-      
+
       // For Flutter app (verifyOTP), ALWAYS use 'mobile' scope
       // This endpoint is specifically for Flutter app, so scope should always be 'mobile'
       let userRole = user.role?.toLowerCase();
-      
+
       // CRITICAL FIX: Flutter app verifyOTP always gets 'mobile' scope
       // Even if user has admin role, Flutter app login should give mobile scope
       // Admin roles should use admin-login endpoint, but if they use verifyOTP, give mobile scope
       const scope = 'mobile';
-      
+
       // Log warning if admin role user is using Flutter app login
       const adminRoles = ['superadmin', 'admin', 'moderator', 'viewer', 'employee'];
       if (adminRoles.includes(userRole)) {
         console.log(`⚠️ Warning: Admin role user (${userRole}) using Flutter app login via verifyOTP.`);
         console.log(`   They should use admin-login endpoint, but allowing with mobile scope for compatibility.`);
       }
-      
+
       // If user has admin role but using Flutter app, we'll still give mobile scope
       // This allows backward compatibility
-      
+
       // Generate access and refresh tokens with appropriate scope
       console.log('🔍 [VERIFY OTP] Generating tokens for user:', user.id);
-      
+
       let accessToken, refreshToken;
       try {
-        const tokenPayload = { 
+        const tokenPayload = {
           id: user.id,
-          phone: normalizedPhone, 
+          phone: normalizedPhone,
           role: userRole,
           scope: scope
         };
@@ -960,7 +966,7 @@ export const AuthController = {
         console.error('❌ [VERIFY OTP] Failed to save refresh token:', updateError.message);
         // Don't throw - tokens are still valid even if refresh token save fails
       }
-      
+
       // ✅ CONFIRMATION: OTP VERIFIED SUCCESSFULLY
       console.log('========================================');
       console.log('✅ OTP VERIFICATION: SUCCESS');
@@ -970,15 +976,15 @@ export const AuthController = {
       console.log('✅ Token Generated: YES');
       console.log('✅ Response Sending: YES');
       console.log('========================================');
-      
+
       // Fetch user with referral info
       const userWithReferral = await pool.query(
         "SELECT id, name, email, phone, role, status, referral_code, reward_balance FROM users WHERE id = $1",
         [user.id]
       );
-      
+
       const fullUser = userWithReferral.rows[0] || user;
-      
+
       res.json({
         success: true,
         accessToken,
@@ -1003,20 +1009,20 @@ export const AuthController = {
       console.error("   Error stack:", error.stack);
       console.error("   Error code:", error.code);
       console.error("========================================");
-      
+
       // Return detailed error for debugging (in development)
       const errorResponse = {
         success: false,
         error: "Internal server error",
         message: error.message || "An error occurred during OTP verification"
       };
-      
+
       // In production, hide error details
       if (process.env.NODE_ENV === 'production') {
         errorResponse.message = "Internal server error";
         delete errorResponse.error;
       }
-      
+
       res.status(500).json(errorResponse);
     }
   },
@@ -1042,18 +1048,18 @@ export const AuthController = {
           hasPhone: !!phone,
           hasPassword: !!password,
         });
-        return res.status(400).json({ 
-          success: false, 
-          message: "Name, phone, and password are required" 
+        return res.status(400).json({
+          success: false,
+          message: "Name, phone, and password are required"
         });
       }
 
       // Validate role
       if (!['company_products', 'seller_products'].includes(role)) {
         console.log('❌ Invalid role:', role);
-        return res.status(400).json({ 
-          success: false, 
-          message: "Role must be 'company_products' or 'seller_products'" 
+        return res.status(400).json({
+          success: false,
+          message: "Role must be 'company_products' or 'seller_products'"
         });
       }
 
@@ -1066,9 +1072,9 @@ export const AuthController = {
 
       if (!normalizedPhone) {
         console.log('❌ Phone normalization failed:', phone);
-        return res.status(400).json({ 
-          success: false, 
-          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        return res.status(400).json({
+          success: false,
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}`
         });
       }
 
@@ -1077,21 +1083,21 @@ export const AuthController = {
           original: phone,
           normalized: normalizedPhone,
         });
-        return res.status(400).json({ 
-          success: false, 
-          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}` 
+        return res.status(400).json({
+          success: false,
+          message: `Invalid phone number format. Use Iraq format: +964XXXXXXXXXX (9-10 digits after +964). Received: ${phone}`
         });
       }
 
       // Generate email if not provided (required by database)
       const userEmail = email || `user_${normalizedPhone.replace(/\+/g, '').replace(/\s/g, '')}@bidmaster.com`;
-      
+
       // Check if user already exists
       console.log('📝 Checking if user already exists:', {
         phone: normalizedPhone,
         email: userEmail
       });
-      
+
       let existingUser;
       try {
         existingUser = await pool.query(
@@ -1111,9 +1117,9 @@ export const AuthController = {
       }
 
       if (existingUser.rows.length > 0) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "User with this phone or email already exists" 
+        return res.status(400).json({
+          success: false,
+          message: "User with this phone or email already exists"
         });
       }
 
@@ -1129,7 +1135,7 @@ export const AuthController = {
         hasPassword: !!hashedPassword,
         passwordLength: hashedPassword?.length
       });
-      
+
       let result;
       try {
         result = await pool.query(
@@ -1155,10 +1161,10 @@ export const AuthController = {
       const user = result.rows[0];
 
       // Generate access and refresh tokens
-      const tokenPayload = { 
-        id: user.id, 
-        phone: user.phone, 
-        role: user.role 
+      const tokenPayload = {
+        id: user.id,
+        phone: user.phone,
+        role: user.role
       };
       const accessToken = generateAccessToken(tokenPayload);
       const refreshToken = generateRefreshToken(tokenPayload);
@@ -1215,20 +1221,20 @@ export const AuthController = {
       console.error("   Full Error Object:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
       console.error("   Stack Trace:", error.stack);
       console.error("=".repeat(60));
-      
+
       // Handle specific database errors
       if (error.code === '23505') { // Unique constraint violation
         const constraint = error.constraint || 'unknown';
         let message = "User with this phone or email already exists";
-        
+
         if (constraint.includes('phone')) {
           message = "Phone number already registered";
         } else if (constraint.includes('email')) {
           message = "Email already registered";
         }
-        
-        return res.status(400).json({ 
-          success: false, 
+
+        return res.status(400).json({
+          success: false,
           message: message,
           error: {
             code: error.code,
@@ -1237,10 +1243,10 @@ export const AuthController = {
           }
         });
       }
-      
+
       if (error.code === '23502') { // Not null constraint violation
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: `Missing required field: ${error.column || 'unknown'}`,
           error: {
             code: error.code,
@@ -1251,8 +1257,8 @@ export const AuthController = {
       }
 
       if (error.code === '23514') { // Check constraint violation
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: `Invalid value for field: ${error.column || 'unknown'}. ${error.message}`,
           error: {
             code: error.code,
@@ -1263,8 +1269,8 @@ export const AuthController = {
       }
 
       // Database connection errors
-      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || 
-          error.message?.includes('connection') || error.message?.includes('ECONNREFUSED')) {
+      if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' ||
+        error.message?.includes('connection') || error.message?.includes('ECONNREFUSED')) {
         console.error('❌ Database connection error detected');
         return res.status(500).json({
           success: false,
@@ -1275,7 +1281,7 @@ export const AuthController = {
           }
         });
       }
-      
+
       // Return detailed error in development, generic in production
       const errorResponse = {
         success: false,
@@ -1305,9 +1311,9 @@ export const AuthController = {
       const { phone, email, password } = req.body;
 
       if (!password || (!phone && !email)) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Phone or email and password are required" 
+        return res.status(400).json({
+          success: false,
+          message: "Phone or email and password are required"
         });
       }
 
@@ -1316,9 +1322,9 @@ export const AuthController = {
       if (phone) {
         const normalizedPhone = normalizeIraqPhone(phone);
         if (!isValidIraqPhone(phone)) {
-          return res.status(400).json({ 
-            success: false, 
-            message: "Invalid phone number format" 
+          return res.status(400).json({
+            success: false,
+            message: "Invalid phone number format"
           });
         }
         const result = await pool.query(
@@ -1335,34 +1341,34 @@ export const AuthController = {
       }
 
       if (!user) {
-        return res.status(401).json({ 
-          success: false, 
-          message: "Invalid credentials" 
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials"
         });
       }
 
       // Check if user is blocked
       if (user.status === 'blocked') {
-        return res.status(403).json({ 
-          success: false, 
-          message: "Account is blocked" 
+        return res.status(403).json({
+          success: false,
+          message: "Account is blocked"
         });
       }
 
       // Verify password
       const validPassword = await bcrypt.compare(password, user.password);
       if (!validPassword) {
-        return res.status(401).json({ 
-          success: false, 
-          message: "Invalid credentials" 
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials"
         });
       }
 
       // Generate access and refresh tokens
-      const tokenPayload = { 
-        id: user.id, 
-        phone: user.phone, 
-        role: user.role 
+      const tokenPayload = {
+        id: user.id,
+        phone: user.phone,
+        role: user.role
       };
       const accessToken = generateAccessToken(tokenPayload);
       const refreshToken = generateRefreshToken(tokenPayload);
@@ -1390,9 +1396,9 @@ export const AuthController = {
       });
     } catch (error) {
       console.error("Error during login:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Internal server error" 
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
       });
     }
   },
@@ -1409,9 +1415,9 @@ export const AuthController = {
       );
 
       if (result.rows.length === 0) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "User not found" 
+        return res.status(404).json({
+          success: false,
+          message: "User not found"
         });
       }
 
@@ -1421,9 +1427,9 @@ export const AuthController = {
       });
     } catch (error) {
       console.error("Error fetching profile:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Internal server error" 
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
       });
     }
   },
@@ -1435,9 +1441,9 @@ export const AuthController = {
       const { name, phone, role } = req.body;
 
       if (!name && !phone && !role) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "At least one field (name, phone, or role) is required" 
+        return res.status(400).json({
+          success: false,
+          message: "At least one field (name, phone, or role) is required"
         });
       }
 
@@ -1453,9 +1459,9 @@ export const AuthController = {
       if (phone) {
         const normalizedPhone = normalizeIraqPhone(phone);
         if (!isValidIraqPhone(phone)) {
-          return res.status(400).json({ 
-            success: false, 
-            message: "Invalid phone number format" 
+          return res.status(400).json({
+            success: false,
+            message: "Invalid phone number format"
           });
         }
 
@@ -1466,9 +1472,9 @@ export const AuthController = {
         );
 
         if (existingUser.rows.length > 0) {
-          return res.status(400).json({ 
-            success: false, 
-            message: "Phone number already in use" 
+          return res.status(400).json({
+            success: false,
+            message: "Phone number already in use"
           });
         }
 
@@ -1478,7 +1484,7 @@ export const AuthController = {
 
       if (role) {
         const normalizedRole = role.toLowerCase().trim();
-        
+
         // Map old role names to new ones (for backward compatibility)
         let mappedRole = normalizedRole;
         if (normalizedRole === 'buyer') {
@@ -1486,15 +1492,15 @@ export const AuthController = {
         } else if (normalizedRole === 'seller') {
           mappedRole = 'seller_products';
         }
-        
+
         // Only allow company_products/seller_products roles to be set by users themselves
         if (mappedRole !== 'company_products' && mappedRole !== 'seller_products') {
-          return res.status(400).json({ 
-            success: false, 
-            message: "Role must be 'company_products' or 'seller_products' (or 'buyer'/'seller' for backward compatibility)" 
+          return res.status(400).json({
+            success: false,
+            message: "Role must be 'company_products' or 'seller_products' (or 'buyer'/'seller' for backward compatibility)"
           });
         }
-        
+
         updates.push(`role = $${paramCount++}`);
         params.push(mappedRole);
       }
@@ -1506,14 +1512,14 @@ export const AuthController = {
       const result = await pool.query(query, params);
 
       if (result.rows.length === 0) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "User not found" 
+        return res.status(404).json({
+          success: false,
+          message: "User not found"
         });
       }
 
       const updatedUser = result.rows[0];
-      
+
       // Generate new tokens when role is updated
       let responseData = {
         success: true,
@@ -1524,7 +1530,7 @@ export const AuthController = {
       if (role) {
         // Get scope from current token (preserve scope)
         const scope = req.user.scope || 'mobile';
-        
+
         // Normalize role for token
         let tokenRole = updatedUser.role?.toLowerCase();
         if (tokenRole === 'admin') {
@@ -1538,7 +1544,7 @@ export const AuthController = {
           role: tokenRole,
           scope: scope
         };
-        
+
         const newAccessToken = generateAccessToken(tokenPayload);
         const newRefreshToken = generateRefreshToken(tokenPayload);
 
@@ -1557,9 +1563,9 @@ export const AuthController = {
       res.json(responseData);
     } catch (error) {
       console.error("Error updating profile:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Internal server error" 
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
       });
     }
   },
@@ -1681,9 +1687,9 @@ export const AuthController = {
       });
     } catch (error) {
       console.error("Error during logout:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Internal server error" 
+      res.status(500).json({
+        success: false,
+        message: "Internal server error"
       });
     }
   },
@@ -1702,19 +1708,19 @@ export const AuthController = {
       const userId = req.user.id;
 
       if (!newPhone) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "New phone number is required" 
+          message: "New phone number is required"
         });
       }
 
       // Normalize and validate new phone
       const normalizedNewPhone = normalizeIraqPhone(newPhone);
-      
+
       if (!isValidIraqPhone(newPhone)) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Invalid phone number format. Use Iraq format: +964XXXXXXXXXX" 
+          message: "Invalid phone number format. Use Iraq format: +964XXXXXXXXXX"
         });
       }
 
@@ -1725,9 +1731,9 @@ export const AuthController = {
       );
 
       if (existingUser.rows.length > 0) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "This phone number is already in use by another account" 
+          message: "This phone number is already in use by another account"
         });
       }
 
@@ -1737,9 +1743,9 @@ export const AuthController = {
         console.log(`✅ Change phone OTP sent successfully to ${normalizedNewPhone} via Twilio Verify`);
       } catch (error) {
         console.error(`❌ Failed to send change phone OTP via Twilio Verify:`, error.message);
-        return res.status(500).json({ 
+        return res.status(500).json({
           success: false,
-          message: error.message || "Failed to send OTP. Please try again." 
+          message: error.message || "Failed to send OTP. Please try again."
         });
       }
 
@@ -1749,9 +1755,9 @@ export const AuthController = {
       });
     } catch (error) {
       console.error("Error sending change phone OTP:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: "Internal server error" 
+        message: "Internal server error"
       });
     }
   },
@@ -1770,39 +1776,39 @@ export const AuthController = {
       const userId = req.user.id;
 
       if (!newPhone || !otp) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "New phone number and OTP are required" 
+          message: "New phone number and OTP are required"
         });
       }
 
       // Normalize new phone
       const normalizedNewPhone = normalizeIraqPhone(newPhone);
-      
+
       if (!isValidIraqPhone(newPhone)) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Invalid phone number format" 
+          message: "Invalid phone number format"
         });
       }
 
       // Verify OTP using Twilio Verify
       try {
         const verificationResult = await TwilioService.verifyOTP(normalizedNewPhone, otp);
-        
+
         if (!verificationResult.success || verificationResult.status !== 'approved') {
-          return res.status(401).json({ 
+          return res.status(401).json({
             success: false,
-            message: verificationResult.message || 'Invalid OTP. Please check and try again.' 
+            message: verificationResult.message || 'Invalid OTP. Please check and try again.'
           });
         }
-        
+
         console.log('✅ Change phone OTP verified successfully via Twilio Verify');
       } catch (error) {
         console.error('❌ Twilio Verify error:', error.message);
-        return res.status(401).json({ 
+        return res.status(401).json({
           success: false,
-          message: error.message || 'OTP verification failed. Please try again.' 
+          message: error.message || 'OTP verification failed. Please try again.'
         });
       }
 
@@ -1813,9 +1819,9 @@ export const AuthController = {
       );
 
       if (existingUser.rows.length > 0) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "This phone number is already in use by another account" 
+          message: "This phone number is already in use by another account"
         });
       }
 
@@ -1829,9 +1835,9 @@ export const AuthController = {
       );
 
       if (result.rows.length === 0) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           success: false,
-          message: "User not found" 
+          message: "User not found"
         });
       }
 
@@ -1844,7 +1850,7 @@ export const AuthController = {
         role: updatedUser.role?.toLowerCase() || 'company_products',
         scope: req.user.scope || 'mobile'
       };
-      
+
       const newAccessToken = generateAccessToken(tokenPayload);
       const newRefreshToken = generateRefreshToken(tokenPayload);
 
@@ -1872,9 +1878,9 @@ export const AuthController = {
       });
     } catch (error) {
       console.error("Error verifying change phone:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: "Internal server error" 
+        message: "Internal server error"
       });
     }
   }

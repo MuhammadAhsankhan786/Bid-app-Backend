@@ -1,240 +1,168 @@
+
 import twilio from 'twilio';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import pool from '../config/db.js'; // Import existing DB pool
 
-// Ensure .env is loaded from project root
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const envPath = join(__dirname, '../../.env');
-dotenv.config({ path: envPath });
-
-// Initialize Twilio client (only if credentials are provided)
+// Initialize Twilio client
 let twilioClient = null;
 if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
   twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  console.log('✅ Twilio client initialized with Account SID:', process.env.TWILIO_ACCOUNT_SID);
+  console.log('✅ Twilio client initialized (Custom OTP Mode)');
 } else {
-  console.warn('⚠️ Twilio client NOT initialized. Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN');
+  console.warn('⚠️ Twilio client NOT initialized. Missing Credentials');
 }
 
 /**
  * Normalize Iraq phone number to +964 format
- * @param {string} phone - Phone number in various formats
- * @returns {string} - Normalized phone number starting with +964
  */
 function normalizeIraqPhone(phone) {
   if (!phone) return phone;
-  
   let normalized = phone.trim();
-  
-  // If it already starts with "+964", keep it
-  if (normalized.startsWith('+964')) {
-    return normalized;
-  }
-  
-  // If it starts with "964", prepend "+"
-  if (normalized.startsWith('964')) {
-    return '+' + normalized;
-  }
-  
-  // If it starts with "00964", convert to "+964"
-  if (normalized.startsWith('00964')) {
-    return '+964' + normalized.substring(5);
-  }
-  
-  // If it starts with "0", replace with "+964"
-  if (normalized.startsWith('0')) {
-    return '+964' + normalized.substring(1);
-  }
-  
-  // Return as-is if no Iraq format detected
+  if (normalized.startsWith('+964')) return normalized;
+  if (normalized.startsWith('964')) return '+' + normalized;
+  if (normalized.startsWith('00964')) return '+964' + normalized.substring(5);
+  if (normalized.startsWith('0')) return '+964' + normalized.substring(1);
   return normalized;
+}
+
+/**
+ * Generate a random 6-digit OTP
+ */
+function generateOTP() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 export const TwilioService = {
   /**
-   * Send OTP using Twilio Verify API
-   * Uses verifications.create() to send OTP via SMS
-   * 
-   * IMPORTANT: Twilio Verify API does NOT require and does NOT allow a "from" number.
-   * It uses the default sender configured in Twilio Verify Service.
-   * 
-   * @param {string} phone - Normalized phone number (e.g., +9647700914000)
-   * @returns {Promise<{success: boolean, message?: string}>}
+   * Send OTP using Custom Logic + Raw SMS
+   * (Bypassing Twilio Verify due to Iraq Blocking issues)
    */
   async sendOTP(phone) {
-    // 🔍 DEBUG: Log Twilio configuration
-    console.log('🔍 [TWILIO SERVICE] Configuration Check:');
-    console.log('   Using Twilio Service:', process.env.TWILIO_VERIFY_SID || 'NOT SET');
-    console.log('   Using Twilio Account:', process.env.TWILIO_ACCOUNT_SID || 'NOT SET');
-    console.log('   Twilio Auth Token:', process.env.TWILIO_AUTH_TOKEN ? 'SET (hidden)' : 'NOT SET');
-    
-    // Validate Twilio configuration
-    if (!twilioClient) {
-      console.error('[ERROR] Twilio client not initialized. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN');
-      throw new Error('SMS service not configured');
-    }
+    console.log(`[CUSTOM OTP] Request to send OTP to ${phone}`);
+    const normalizedPhone = normalizeIraqPhone(phone);
 
-    if (!process.env.TWILIO_VERIFY_SID) {
-      console.error('[ERROR] TWILIO_VERIFY_SID not configured');
-      throw new Error('Twilio Verify Service SID not configured');
-    }
-
-    console.log("✅ Using VERIFY SID:", process.env.TWILIO_VERIFY_SID);
+    // 1. Generate Code
+    const code = generateOTP();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     try {
-      // Use Twilio Verify API to send OTP
-      // NOTE: Twilio Verify does NOT use "from" field - it uses default sender from Verify Service
-      const verification = await twilioClient.verify.v2
-        .services(process.env.TWILIO_VERIFY_SID)
-        .verifications
-        .create({
-          to: phone,
-          channel: 'sms'
-        });
+      // 2. Store in Database (Upsert)
+      await pool.query(`
+        INSERT INTO verification_codes (phone, code, expires_at)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (phone) 
+        DO UPDATE SET code = $2, expires_at = $3
+      `, [normalizedPhone, code, expiresAt]);
 
-      console.log(`[TWILIO VERIFY] OTP verification sent to ${phone}, Status: ${verification.status}`);
-      
+      console.log(`[CUSTOM OTP] Code generated and stored for ${normalizedPhone}`);
+
+      // 3. Send via Raw SMS (Programmable Messaging)
+      // This uses the Account's Global Sender (or specific number if available)
+      // We explicitly prefer a number if we know one, to avoid Alpha Sender ID blocks.
+      // But usually 'from' left empty uses the default messaging service or a number?
+      // No, creating a message requires 'from' or 'messagingServiceSid'.
+
+      // We will try to find a valid 'from' source.
+      // Option A: Use the Messaging Service we created earlier (Best)
+      // Option B: Query for an outgoing number.
+
+      // Let's use a hardcoded fallback or lookup? 
+      // Safe bet: Use the Messaging Service SID we know works, or find one dynamically.
+      // Actually, to make it robust, lets query for our 'BidMaster OTP Sender' service SID dynamically
+      // or fall back to the first available number.
+
+      let fromParams = {};
+
+      // Try to find our specific Messaging Service
+      try {
+        const services = await twilioClient.messaging.v1.services.list({ limit: 20 });
+        const myService = services.find(s => s.friendlyName === 'BidMaster OTP Sender');
+        if (myService) {
+          fromParams = { messagingServiceSid: myService.sid };
+          console.log(`[CUSTOM OTP] Using Messaging Service: ${myService.sid}`);
+        } else {
+          // Fallback to first number
+          const numbers = await twilioClient.incomingPhoneNumbers.list({ limit: 1 });
+          if (numbers.length > 0) {
+            fromParams = { from: numbers[0].phoneNumber };
+            console.log(`[CUSTOM OTP] Using Number: ${numbers[0].phoneNumber}`);
+          } else {
+            throw new Error('No SMS capability found (No Messaging Service or Numbers).');
+          }
+        }
+      } catch (e) {
+        console.warn('[CUSTOM OTP] Error finding sender, trying default...', e.message);
+        // If generic error, we might fail on create.
+      }
+
+      const message = await twilioClient.messages.create({
+        body: `Your BidMaster verification code is: ${code}`,
+        to: normalizedPhone,
+        ...fromParams
+      });
+
+      console.log(`[CUSTOM OTP] SMS Sent! SID: ${message.sid}`);
+
       return {
         success: true,
-        message: 'OTP sent successfully'
+        message: 'OTP sent successfully (via SMS)'
       };
+
     } catch (error) {
-      console.error(`[TWILIO VERIFY ERROR] Failed to send OTP to ${phone}:`, error.message);
-      console.error(`[TWILIO VERIFY ERROR] Error code: ${error.code}, Status: ${error.status}`);
-      
-      // Handle specific Twilio errors
-      if (error.code === 20404 || error.status === 404) {
-        throw new Error(`Twilio Verify Service not found. Please check your TWILIO_VERIFY_SID (${process.env.TWILIO_VERIFY_SID}). The service may not exist in your Twilio account.`);
-      } else if (error.code === 20003) {
-        throw new Error('Twilio account credentials are invalid. Please check your TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.');
-      } else if (error.code === 21211) {
-        throw new Error('Invalid phone number format. Please use E.164 format (e.g., +9647700914000).');
-      } else if (error.code === 60200) {
-        throw new Error('Twilio Verify Service configuration error. Please check your Verify Service settings in Twilio Console.');
-      } else if (error.code === 21608) {
-        // Trial account - phone number not verified
-        const verifyUrl = 'https://console.twilio.com/us1/develop/phone-numbers/manage/verified';
-        throw new Error(
-          `Phone number ${phone} is not verified. Trial accounts can only send OTPs to verified numbers.\n` +
-          `Please verify this number at: ${verifyUrl}\n` +
-          `Or upgrade your Twilio account to send to any number.`
-        );
+      console.error(`[CUSTOM OTP ERROR] Failed to send to ${normalizedPhone}:`, error.message);
+
+      // Map to friendly errors
+      if (error.code === 21608) {
+        throw new Error('This number is unverified (Trial Account). Please verify it in Twilio Console.');
+      } else if (error.code === 21408) {
+        throw new Error('Permission to send SMS to this region is not enabled in Twilio Geo Permissions.');
       }
-      
-      throw new Error(`Failed to send OTP: ${error.message}`);
+
+      throw new Error(`Failed to send SMS: ${error.message} (Code: ${error.code})`);
     }
   },
 
   /**
-   * Verify OTP using Twilio Verify API
-   * Uses verificationChecks.create() to verify the OTP code
-   * 
-   * @param {string} phone - Phone number (will be normalized to +964 format for Iraq)
-   * @param {string} code - OTP code entered by user
-   * @returns {Promise<{success: boolean, status: string, message?: string}>}
+   * Verify OTP using Database Check
    */
   async verifyOTP(phone, code) {
-    // Normalize phone number for Iraq (+964 format)
     const normalizedPhone = normalizeIraqPhone(phone);
-    
-    // Log the fixed verify request
-    console.log("Fixed verify request:", normalizedPhone, code);
-    
-    // 🔍 DEBUG: Log Twilio configuration
-    console.log('🔍 [TWILIO SERVICE] Verify OTP Configuration Check:');
-    console.log('   Using Twilio Service:', process.env.TWILIO_VERIFY_SID || 'NOT SET');
-    console.log('   Using Twilio Account:', process.env.TWILIO_ACCOUNT_SID || 'NOT SET');
-    console.log('   Twilio Auth Token:', process.env.TWILIO_AUTH_TOKEN ? 'SET (hidden)' : 'NOT SET');
-    
-    // Validate Twilio configuration
-    if (!twilioClient) {
-      console.error('[ERROR] Twilio client not initialized. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN');
-      throw new Error('SMS service not configured');
-    }
-
-    if (!process.env.TWILIO_VERIFY_SID) {
-      console.error('[ERROR] TWILIO_VERIFY_SID not configured');
-      throw new Error('Twilio Verify Service SID not configured');
-    }
+    console.log(`[CUSTOM OTP] Verifying code for ${normalizedPhone}`);
 
     try {
-      // Use Twilio Verify API to verify OTP
-      // ✅ CORRECT: Using verificationChecks (plural) - correct Twilio API endpoint
-      console.log("🚀 Using Twilio verificationChecks endpoint");
-      console.log("   Service SID:", process.env.TWILIO_VERIFY_SID);
-      console.log("   Phone:", normalizedPhone);
-      console.log("   Code:", code ? "***" : "missing");
-      
-      const verificationCheck = await twilioClient.verify.v2
-        .services(process.env.TWILIO_VERIFY_SID)
-        .verificationChecks  // ✅ CORRECT: Plural form
-        .create({
-          to: normalizedPhone,
-          code: code
-        });
+      // 1. Fetch from DB
+      const res = await pool.query(`
+        SELECT code, expires_at FROM verification_codes 
+        WHERE phone = $1
+      `, [normalizedPhone]);
 
-      console.log(`[TWILIO VERIFY] OTP verification check for ${normalizedPhone}, Status: ${verificationCheck.status}`);
+      if (res.rows.length === 0) {
+        return { success: false, status: 'failed', message: 'No OTP found for this number' };
+      }
 
-      if (verificationCheck.status === 'approved') {
+      const record = res.rows[0];
+
+      // 2. Check Expiry
+      if (new Date() > new Date(record.expires_at)) {
+        return { success: false, status: 'expired', message: 'OTP has expired' };
+      }
+
+      // 3. Check Match
+      if (record.code === code) {
+        // Success! Delete the code so it can't be reused
+        await pool.query('DELETE FROM verification_codes WHERE phone = $1', [normalizedPhone]);
+
         return {
           success: true,
           status: 'approved',
           message: 'OTP verified successfully'
         };
       } else {
-        return {
-          success: false,
-          status: verificationCheck.status,
-          message: 'Invalid or expired OTP'
-        };
+        return { success: false, status: 'failed', message: 'Invalid OTP code' };
       }
+
     } catch (error) {
-      console.error(`[TWILIO VERIFY ERROR] Failed to verify OTP for ${normalizedPhone}:`, error.message);
-      console.error(`[TWILIO VERIFY ERROR] Error code: ${error.code}, Status: ${error.status}`);
-      console.error(`[TWILIO VERIFY ERROR] Full error:`, JSON.stringify(error, null, 2));
-      
-      // Twilio returns 404 if verification not found or expired
-      if (error.code === 20404 || error.status === 404) {
-        // Check if it's a service not found error (more specific check)
-        const errorMsg = error.message || '';
-        const errorMoreInfo = error.moreInfo || '';
-        
-        // Service not found - check for specific indicators
-        if (errorMsg.includes('Services') && errorMsg.includes('not found')) {
-          throw new Error(`Twilio Verify Service not found. Please check your TWILIO_VERIFY_SID (${process.env.TWILIO_VERIFY_SID}). The service may not exist in your Twilio account.`);
-        }
-        
-        // Verification not found - OTP not sent or expired
-        if (errorMsg.includes('Verification') || errorMsg.includes('verification') || errorMoreInfo.includes('Verification')) {
-          return {
-            success: false,
-            status: 'not_found',
-            message: 'OTP not found or expired. Please request a new OTP first.'
-          };
-        }
-        
-        // Default: OTP not found or expired
-        return {
-          success: false,
-          status: 'not_found',
-          message: 'OTP not found or expired. Please request a new OTP first.'
-        };
-      } else if (error.code === 20003) {
-        throw new Error('Twilio account credentials are invalid. Please check your TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.');
-      } else if (error.code === 60200) {
-        throw new Error('Twilio Verify Service configuration error. Please check your Verify Service settings in Twilio Console.');
-      } else if (error.code === 60203) {
-        // Max attempts exceeded
-        return {
-          success: false,
-          status: 'max_attempts',
-          message: 'Maximum verification attempts exceeded. Please request a new OTP.'
-        };
-      }
-      
-      throw new Error(`Failed to verify OTP: ${error.message}`);
+      console.error(`[CUSTOM OTP VERIFY ERROR]`, error.message);
+      throw new Error('Internal Server Error during verification');
     }
   }
 };

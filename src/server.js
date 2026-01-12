@@ -32,6 +32,7 @@ const app = express();
 ====================================================== */
 
 // CORS configuration - allow localhost, Render, LAN IPs & future web app
+// CORS configuration - allow localhost, Render, LAN IPs & future web app
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true); // mobile, Postman
@@ -110,6 +111,12 @@ app.use((req, res, next) => {
   );
   next();
 });
+
+// ✅ JSON parsing after CORS
+app.use(express.json());
+
+// ✅ Serve static files (uploads)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // ✅ JSON parsing after CORS
 app.use(express.json());

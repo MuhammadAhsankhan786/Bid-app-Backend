@@ -74,7 +74,7 @@ export const BidsController = {
       // Step 5: Validate user role (case-insensitive check)
       const userRole = req.user.role?.toLowerCase();
       const blockedRoles = []; // Empty = allow all roles
-      
+
       if (blockedRoles.includes(userRole)) {
         console.log('🧩 [BidError] Reason: User role is blocked from bidding', { role: req.user.role });
         return res.status(403).json({
@@ -92,9 +92,9 @@ export const BidsController = {
           [productIdNum]
         );
       } catch (dbError) {
-        console.log('🧩 [BidError] Reason: Database query failed when checking product', { 
+        console.log('🧩 [BidError] Reason: Database query failed when checking product', {
           error: dbError.message,
-          code: dbError.code 
+          code: dbError.code
         });
         return res.status(500).json({
           success: false,
@@ -111,9 +111,9 @@ export const BidsController = {
       }
 
       const product = productResult.rows[0];
-      console.log('🧩 [BidPlace] Product found:', { 
-        id: product.id, 
-        title: product.title, 
+      console.log('🧩 [BidPlace] Product found:', {
+        id: product.id,
+        title: product.title,
         status: product.status,
         seller_id: product.seller_id,
         current_bid: product.current_bid,
@@ -131,7 +131,7 @@ export const BidsController = {
 
       // Step 8: Check if auction has ended
       if (product.auction_end_time && new Date(product.auction_end_time) < new Date()) {
-        console.log('🧩 [BidError] Reason: Auction has ended', { 
+        console.log('🧩 [BidError] Reason: Auction has ended', {
           auction_end_time: product.auction_end_time,
           current_time: new Date().toISOString()
         });
@@ -143,9 +143,9 @@ export const BidsController = {
 
       // Step 9: Check if seller is trying to bid on their own product
       if (product.seller_id === buyerId) {
-        console.log('🧩 [BidError] Reason: User cannot bid on their own product', { 
-          seller_id: product.seller_id, 
-          buyer_id: buyerId 
+        console.log('🧩 [BidError] Reason: User cannot bid on their own product', {
+          seller_id: product.seller_id,
+          buyer_id: buyerId
         });
         return res.status(400).json({
           success: false,
@@ -155,8 +155,8 @@ export const BidsController = {
 
       // Step 10: Get current highest bid
       const currentBid = parseFloat(product.current_bid) || parseFloat(product.starting_bid) || 0;
-      console.log('🧩 [BidPlace] Current bid comparison:', { 
-        currentBid, 
+      console.log('🧩 [BidPlace] Current bid comparison:', {
+        currentBid,
         newBid: bidAmount,
         product_current_bid: product.current_bid,
         product_starting_bid: product.starting_bid
@@ -164,9 +164,9 @@ export const BidsController = {
 
       // Step 11: Validate bid amount is higher than current bid
       if (bidAmount <= currentBid) {
-        console.log('🧩 [BidError] Reason: Bid amount must be higher than current bid', { 
-          currentBid, 
-          newBid: bidAmount 
+        console.log('🧩 [BidError] Reason: Bid amount must be higher than current bid', {
+          currentBid,
+          newBid: bidAmount
         });
         return res.status(400).json({
           success: false,
@@ -175,10 +175,10 @@ export const BidsController = {
       }
 
       // Step 12: Start transaction and insert bid
-      console.log('🧩 [BidPlace] Starting transaction to place bid:', { 
-        productId: productIdNum, 
-        userId: buyerId, 
-        amount: bidAmount 
+      console.log('🧩 [BidPlace] Starting transaction to place bid:', {
+        productId: productIdNum,
+        userId: buyerId,
+        amount: bidAmount
       });
 
       await pool.query('BEGIN');
@@ -198,9 +198,9 @@ export const BidsController = {
         }
 
         const newBid = bidResult.rows[0];
-        console.log('🧩 [BidPlace] Bid inserted successfully:', { 
-          bid_id: newBid.id, 
-          amount: newBid.amount 
+        console.log('🧩 [BidPlace] Bid inserted successfully:', {
+          bid_id: newBid.id,
+          amount: newBid.amount
         });
 
         // Update product with new highest bid
@@ -340,7 +340,7 @@ export const BidsController = {
             message: "Bid placed successfully",
             data: responseData
           };
-          
+
           console.log('🧩 [BidPlace] Sending success response:', jsonResponse);
           res.status(201).json(jsonResponse);
         } catch (responseError) {
@@ -361,7 +361,7 @@ export const BidsController = {
           table: dbError.table,
           column: dbError.column
         });
-        
+
         // Handle specific database errors
         if (dbError.code === '23503') { // Foreign key violation
           return res.status(400).json({
@@ -381,7 +381,7 @@ export const BidsController = {
             message: "Bid amount violates constraint"
           });
         }
-        
+
         throw dbError; // Re-throw to be caught by outer catch
       }
     } catch (error) {
@@ -390,7 +390,7 @@ export const BidsController = {
         stack: error.stack,
         name: error.name
       });
-      
+
       // Return appropriate error based on error type
       if (error.name === 'TypeError' && error.message.includes('Cannot read')) {
         return res.status(400).json({
@@ -398,7 +398,7 @@ export const BidsController = {
           message: "Invalid request data format"
         });
       }
-      
+
       res.status(500).json({
         success: false,
         message: "Internal server error while placing bid",

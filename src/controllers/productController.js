@@ -21,7 +21,7 @@ export const ProductController = {
     try {
       const { status, category, search, page = 1, limit = 20 } = req.query;
       const userRole = req.user?.role;
-      
+
       let query = `
         SELECT 
           p.*,
@@ -68,35 +68,35 @@ export const ProductController = {
       console.log('📋 [getProducts] Executing query for role:', userRole);
       const result = await pool.query(query, params);
       console.log(`✅ [getProducts] Found ${result.rows.length} products`);
-      
+
       // Build count query with same filters
       let countQuery = `SELECT COUNT(*) FROM products p WHERE 1=1`;
       const countParams = [];
       let countParamCount = 1;
-      
+
       // FIX: Skip productTypeFilter in count query to prevent errors if column missing
       // if (productTypeFilter) {
       //   countQuery += ` AND ${productTypeFilter}`;
       // }
-      
+
       if (status) {
         countQuery += ` AND p.status = $${countParamCount++}`;
         countParams.push(status);
       }
-      
+
       if (category) {
         countQuery += ` AND p.category_id = $${countParamCount++}`;
         countParams.push(category);
       }
-      
+
       if (search) {
         countQuery += ` AND (p.title ILIKE $${countParamCount++} OR p.description ILIKE $${countParamCount})`;
         countParams.push(`%${search}%`, `%${search}%`);
         countParamCount++;
       }
-      
+
       const countResult = await pool.query(countQuery, countParams);
-      
+
       // NULL-safe: Handle empty count result
       const totalCount = countResult.rows?.[0]?.count ? parseInt(countResult.rows[0].count) : 0;
 
@@ -116,7 +116,7 @@ export const ProductController = {
       console.error("   Error detail:", error.detail);
       console.error("   Error stack:", error.stack);
       // Return 200 with empty array instead of 500
-      res.status(200).json({ 
+      res.status(200).json({
         products: [],
         pagination: {
           total: 0,
@@ -134,7 +134,7 @@ export const ProductController = {
       const userRole = req.user?.role;
       // FIX: Skip product type filter to prevent errors if column doesn't exist
       // const productTypeFilter = this._getProductTypeFilter(userRole);
-      
+
       let query = `
         SELECT 
           p.*,
@@ -148,13 +148,13 @@ export const ProductController = {
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.status = 'pending'
       `;
-      
+
       // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
       const normalizedRole = (userRole || '').toLowerCase().trim();
       if (normalizedRole === 'employee') {
         query += ` AND p.seller_id IS NULL`;
       }
-      
+
       query += ` ORDER BY p.created_at DESC`;
 
       console.log('📋 [getPendingProducts] Executing query for role:', userRole);
@@ -186,7 +186,7 @@ export const ProductController = {
       const userRole = req.user?.role;
       // FIX: Skip product type filter to prevent errors if column doesn't exist
       // const productTypeFilter = this._getProductTypeFilter(userRole);
-      
+
       let query = `
         SELECT 
           p.*,
@@ -202,13 +202,13 @@ export const ProductController = {
         WHERE p.status = 'approved' 
           AND p.auction_end_time > NOW()
       `;
-      
+
       // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
       const normalizedRole = (userRole || '').toLowerCase().trim();
       if (normalizedRole === 'employee') {
         query += ` AND p.seller_id IS NULL`;
       }
-      
+
       query += ` ORDER BY p.auction_end_time ASC`;
 
       console.log('📋 [getLiveAuctions] Executing query for role:', userRole);
@@ -218,10 +218,10 @@ export const ProductController = {
       // NULL-safe: Handle empty results and null hours_left
       const products = (result.rows || []).map(product => ({
         ...product,
-        status: (product.hours_left != null && product.hours_left < 2) ? 'ending' : 
-                (product.hours_left != null && product.hours_left < 6) ? 'hot' : 'active'
+        status: (product.hours_left != null && product.hours_left < 2) ? 'ending' :
+          (product.hours_left != null && product.hours_left < 6) ? 'hot' : 'active'
       }));
-      
+
       res.json(products);
     } catch (error) {
       console.error("❌ [getLiveAuctions] Error fetching live auctions:", error);
@@ -239,7 +239,7 @@ export const ProductController = {
       const userRole = req.user?.role;
       // FIX: Skip product type filter to prevent errors if column doesn't exist
       // const productTypeFilter = this._getProductTypeFilter(userRole);
-      
+
       let query = `
         SELECT 
           p.*,
@@ -251,13 +251,13 @@ export const ProductController = {
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.status = 'rejected'
       `;
-      
+
       // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
       const normalizedRole = (userRole || '').toLowerCase().trim();
       if (normalizedRole === 'employee') {
         query += ` AND p.seller_id IS NULL`;
       }
-      
+
       query += ` ORDER BY p.updated_at DESC, p.created_at DESC`;
 
       console.log('📋 [getRejectedProducts] Executing query for role:', userRole);
@@ -299,13 +299,13 @@ export const ProductController = {
         WHERE p.status = 'approved' 
           AND p.auction_end_time <= NOW()
       `;
-      
+
       // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
       const normalizedRole = (userRole || '').toLowerCase().trim();
       if (normalizedRole === 'employee') {
         query += ` AND p.seller_id IS NULL`;
       }
-      
+
       query += ` ORDER BY p.auction_end_time DESC LIMIT $1 OFFSET $2`;
 
       console.log('📋 [getCompletedProducts] Executing query for role:', userRole);
@@ -318,7 +318,7 @@ export const ProductController = {
         WHERE p.status = 'approved' 
           AND p.auction_end_time <= NOW()
       `;
-      
+
       // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
       // normalizedRole already declared above, reusing it here
       if (normalizedRole === 'employee') {
@@ -326,7 +326,7 @@ export const ProductController = {
       }
 
       const countResult = await pool.query(countQuery);
-      
+
       // NULL-safe: Handle empty count result
       const totalCount = countResult.rows?.[0]?.total ? parseInt(countResult.rows[0].total) : 0;
 
@@ -371,9 +371,9 @@ export const ProductController = {
 
       // Validate product ID
       if (!id || isNaN(parseInt(id))) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Invalid product ID" 
+          message: "Invalid product ID"
         });
       }
 
@@ -384,37 +384,37 @@ export const ProductController = {
       );
 
       if (productCheck.rows.length === 0) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           success: false,
-          message: "Product not found" 
+          message: "Product not found"
         });
       }
 
       const product = productCheck.rows[0];
       const userRole = (req.user?.role || '').toLowerCase().trim();
-      
+
       // Check if product is already approved
       if (product.status === 'approved') {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Product is already approved" 
+          message: "Product is already approved"
         });
       }
-      
+
       // Employee can only approve company products (seller_id = NULL)
       if (userRole === 'employee' && product.seller_id !== null) {
-        return res.status(403).json({ 
+        return res.status(403).json({
           success: false,
-          message: "Employee can only approve company products (not seller products)" 
+          message: "Employee can only approve company products (not seller products)"
         });
       }
-      
+
       const duration = product.duration || 1; // Default to 1 day if not set
 
       // Check if columns exist (with error handling for production)
       let hasAuctionEndTime = false;
       let hasApprovedAt = false;
-      
+
       try {
         const columnCheck = await pool.query(`
           SELECT EXISTS (
@@ -430,7 +430,7 @@ export const ProductController = {
         // Assume column exists if check fails (safer for production)
         hasAuctionEndTime = true;
       }
-      
+
       try {
         const approvedAtCheck = await pool.query(`
           SELECT EXISTS (
@@ -446,21 +446,21 @@ export const ProductController = {
         // Assume column exists if check fails (safer for production)
         hasApprovedAt = true;
       }
-      
+
       // Build UPDATE query - use safe approach that works even if columns don't exist
       const updateFields = [
         "status = 'approved'",
         "rejection_reason = NULL",
         "updated_at = CURRENT_TIMESTAMP"
       ];
-      
+
       if (hasApprovedAt) {
         updateFields.push("approved_at = CURRENT_TIMESTAMP");
       }
-      
+
       const queryParams = [id];
       let paramIndex = 2;
-      
+
       if (hasAuctionEndTime) {
         if (auctionEndTime) {
           updateFields.push(`auction_end_time = $${paramIndex}`);
@@ -472,27 +472,27 @@ export const ProductController = {
           paramIndex++;
         }
       }
-      
+
       const updateQuery = `
         UPDATE products 
         SET ${updateFields.join(', ')}
         WHERE id = $1
         RETURNING *
       `;
-      
+
       console.log('🔍 [ApproveProduct] Executing query:', {
         query: updateQuery.replace(/\$\d+/g, '?'),
         params: queryParams,
         hasAuctionEndTime,
         hasApprovedAt
       });
-      
+
       const result = await pool.query(updateQuery, queryParams);
 
       if (!result.rows || result.rows.length === 0) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           success: false,
-          message: "Product not found" 
+          message: "Product not found"
         });
       }
 
@@ -518,7 +518,7 @@ export const ProductController = {
       console.error("   Product ID:", req.params.id);
       console.error("   User ID:", req.user?.id);
       console.error("   User Role:", req.user?.role);
-      
+
       // Provide more helpful error messages
       let errorMessage = "Failed to approve product";
       if (error.code === '42703') {
@@ -530,8 +530,8 @@ export const ProductController = {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
-      res.status(500).json({ 
+
+      res.status(500).json({
         success: false,
         message: errorMessage,
         error: process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production' ? {
@@ -551,9 +551,9 @@ export const ProductController = {
 
       // Validate product ID
       if (!id || isNaN(parseInt(id))) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Invalid product ID" 
+          message: "Invalid product ID"
         });
       }
 
@@ -564,20 +564,20 @@ export const ProductController = {
       );
 
       if (productCheck.rows.length === 0) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           success: false,
-          message: "Product not found" 
+          message: "Product not found"
         });
       }
 
       const product = productCheck.rows[0];
       const userRole = (req.user?.role || '').toLowerCase().trim();
-      
+
       // Employee can only reject company products (seller_id = NULL)
       if (userRole === 'employee' && product.seller_id !== null) {
-        return res.status(403).json({ 
+        return res.status(403).json({
           success: false,
-          message: "Employee can only reject company products (not seller products)" 
+          message: "Employee can only reject company products (not seller products)"
         });
       }
 
@@ -593,9 +593,9 @@ export const ProductController = {
       );
 
       if (result.rowCount === 0) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           success: false,
-          message: "Product not found" 
+          message: "Product not found"
         });
       }
 
@@ -608,9 +608,9 @@ export const ProductController = {
       });
     } catch (error) {
       console.error("❌ [RejectProduct] Error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: "Failed to reject product" 
+        message: "Failed to reject product"
       });
     }
   },
@@ -622,7 +622,7 @@ export const ProductController = {
       const userRole = req.user?.role;
       // FIX: Skip product type filter to prevent errors if column doesn't exist
       // const productTypeFilter = this._getProductTypeFilter(userRole);
-      
+
       let query = `
         SELECT 
           p.*,
@@ -636,15 +636,15 @@ export const ProductController = {
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE p.id = $1
       `;
-      
+
       const params = [id];
-      
+
       // CRITICAL FIX: Employee can only see company products (seller_id = NULL)
       const normalizedRole = (userRole || '').toLowerCase().trim();
       if (normalizedRole === 'employee') {
         query += ` AND p.seller_id IS NULL`;
       }
-      
+
       console.log('📋 [getProductById] Fetching product:', id);
       const result = await pool.query(query, params);
 
@@ -751,7 +751,7 @@ export const ProductController = {
         LEFT JOIN products p ON d.product_id = p.id
         WHERE d.product_id = $1
       `;
-      
+
       if (hasUploadedAt) {
         query += ` ORDER BY d.uploaded_at DESC`;
       }
@@ -768,7 +768,7 @@ export const ProductController = {
       console.error("   Error code:", error.code);
       console.error("   Error detail:", error.detail);
       // Return 200 with empty array instead of 500
-      res.status(200).json({ 
+      res.status(200).json({
         success: true,
         data: []
       });
@@ -998,11 +998,11 @@ export const ProductController = {
            updated_at AT TIME ZONE 'UTC' as updated_at`,
         [
           null, // seller_id = NULL for company products
-          title, 
-          description || null, 
+          title,
+          description || null,
           JSON.stringify(imagesArray), // images as JSONB
           imagesArray[0] || null, // image_url for backward compatibility
-          startingPrice, 
+          startingPrice,
           days, // duration: 1, 2, or 3
           category_id // Required - already validated above
         ]
@@ -1037,11 +1037,11 @@ export const ProductController = {
             "SELECT id FROM users WHERE role IN ('admin', 'superadmin', 'moderator') AND id != $1",
             [req.user.id]
           );
-          
+
           if (adminResult.rows.length === 0) {
             return; // No admins to notify
           }
-          
+
           // Create notifications in parallel (much faster!)
           const notificationPromises = adminResult.rows.map(admin => {
             return pool.query(
@@ -1069,7 +1069,7 @@ export const ProductController = {
               console.warn(`⚠️ [AdminCreateProduct] Failed to notify admin ${admin.id}:`, notifError.message);
             });
           });
-          
+
           await Promise.all(notificationPromises);
           console.log('✅ [AdminCreateProduct] Notifications created for admins (parallel)');
         } catch (notifError) {
