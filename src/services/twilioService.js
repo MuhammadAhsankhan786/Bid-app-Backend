@@ -117,7 +117,14 @@ export const TwilioService = {
         throw new Error('Permission to send SMS to this region is not enabled in Twilio Geo Permissions.');
       }
 
-      throw new Error(`Failed to send SMS: ${error.message} (Code: ${error.code})`);
+      // Provide more user-friendly error messages
+      if (error.code === 30008) {
+        throw new Error('Unable to deliver SMS to this number. Please check your phone number or contact support.');
+      } else if (error.code === 21211 || error.code === 21212) {
+        throw new Error('Invalid phone number format. Please check and try again.');
+      } else {
+        throw new Error(`Unable to send SMS. Please try again later. (Error: ${error.code || 'Unknown'})`);
+      }
     }
   },
 
