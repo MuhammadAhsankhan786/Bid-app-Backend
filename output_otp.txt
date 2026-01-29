@@ -1,0 +1,12 @@
+﻿≡ƒöî Initializing database connection...
+   DATABASE_URL exists: true
+   DATABASE_URL starts with postgresql: true
+≡ƒöì Fetching stored OTP for +9647700914000...
+Γ£à Connected to Neon PostgreSQL Database
+
+==========================================
+≡ƒöÉ OTP CODE: 783695
+ΓÅ│ Expires in: 96 seconds
+==========================================
+
+Γ£à VALID - Use this to login!
